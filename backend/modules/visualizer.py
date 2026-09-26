@@ -1,239 +1,285 @@
+import json
+import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import pandas as pd
-import numpy as np
-import json
 
-# ── Human-readable number formatter ─────────────────────────────
 def fmt_num(n):
-    """Convert 4970000 → '4.97M', 1300 → '1.3K', etc."""
+    """Convert large numbers to human readable strings: 4970000 -> '4.97M', etc."""
     try:
         n = float(n)
-        if abs(n) >= 1_000_000_000: return f"{n/1_000_000_000:.1f}B"
-        if abs(n) >= 1_000_000:     return f"{n/1_000_000:.1f}M"
-        if abs(n) >= 1_000:         return f"{n/1_000:.1f}K"
+        if abs(n) >= 1_000_000_000:
+            return f"{n/1_000_000_000:.1f}B"
+        if abs(n) >= 1_000_000:
+            return f"{n/1_000_000:.1f}M"
+        if abs(n) >= 1_000:
+            return f"{n/1_000:.1f}K"
         return f"{n:,.0f}"
     except Exception:
         return str(n)
 
-def generate_charts(df):
+
+def generate_charts(df: pd.DataFrame):
+    """
+    Primary visualization generator for Plotly charts.
+    Generates: Bar charts, Pie charts, Histograms, Box plots, Scatter plots, Heatmaps, and Line charts.
+    Assigns _chart_type metadata to each chart: 'distribution', 'categorical', 'relationship', or 'other'.
+    """
     charts = []
-    COLORS = ["#4C78A8","#F28E2B","#E15759","#76B7B2","#59A14F",
-              "#EDC948","#B07AA1","#FF9DA7","#9C755F","#BAB0AC"]
+    COLORS = [
+        "#2563eb", "#3b82f6", "#60a5fa", "#0284c7", "#0ea5e9",
+        "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"
+    ]
 
     numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
-    cat_cols     = df.select_dtypes(include=["object", "category"]).columns.tolist()
+    cat_cols = df.select_dtypes(exclude=["number"]).columns.tolist()
 
-    def finalize(fig, title: str, subtitle: str = "", chart_type: str = "other"):
+    def finalize(fig, title: str, subtitle: str = "", chart_type: str = "other", rotate_x: bool = False):
         fig.update_layout(
             template="plotly_dark",
             title=dict(
-                text=f"<b>{title}</b><br><sup style='color:#aaa'>{subtitle}</sup>" if subtitle else f"<b>{title}</b>",
-                x=0.5, xanchor="center",
+                text=f"<b>{title}</b><br><sup style='color:#94a3b8; font-size:12px'>{subtitle}</sup>" if subtitle else f"<b>{title}</b>",
+                x=0.02, xanchor="left",
                 font=dict(size=16, color="#ffffff")
             ),
             paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(11,15,28,0.6)",
-            margin=dict(l=70, r=40, b=100, t=100),
-            font=dict(family="Inter, Segoe UI, sans-serif", size=13, color="#c9d1d9"),
-            hoverlabel=dict(bgcolor="rgba(20,20,40,0.95)", font_size=13, font_color="#fff"),
-            legend=dict(bgcolor="rgba(30,30,50,0.7)", borderwidth=0, font=dict(size=12)),
+            plot_bgcolor="rgba(15,23,42,0.6)",
+            margin=dict(l=90, r=40, b=90, t=70),
+            font=dict(family="Inter, Segoe UI, sans-serif", size=12, color="#cbd5e1"),
+            hovermode="closest",
+            hoverlabel=dict(
+                bgcolor="#1e293b",
+                bordercolor="#334155",
+                font_size=12,
+                font_color="#ffffff",
+                font_family="Inter, sans-serif"
+            ),
+            legend=dict(bgcolor="rgba(30,41,59,0.7)", borderwidth=0, font=dict(size=11)),
+            autosize=True,
+            height=460
         )
-        # Gridlines: light, subtle
-        fig.update_xaxes(showgrid=False, zeroline=False,
-                         tickfont=dict(size=12), title_font=dict(size=13),
-                         tickangle=0) # STRAIGHT LABELS
-        fig.update_yaxes(showgrid=True, gridcolor="rgba(255,255,255,0.06)",
-                         zeroline=False, tickfont=dict(size=12), title_font=dict(size=13))
+        fig.update_xaxes(
+            showgrid=False,
+            zeroline=False,
+            automargin=True,
+            tickfont=dict(size=12, color="#ffffff"),
+            title_font=dict(size=13, color="#ffffff"),
+            tickangle=-35 if rotate_x else 0
+        )
+        fig.update_yaxes(
+            showgrid=True,
+            gridcolor="rgba(255,255,255,0.08)",
+            zeroline=False,
+            automargin=True,
+            tickfont=dict(size=12, color="#ffffff"),
+            title_font=dict(size=13, color="#ffffff"),
+            tickformat=",",
+            exponentformat="none"
+        )
         result = json.loads(fig.to_json())
         result["_chart_type"] = chart_type
         return result
 
-    # ── Helper: format Y axis ticks to avoid scientific notation ──
-    def fix_yaxis(fig):
-        fig.update_yaxes(tickformat=",", exponentformat="none")
-        return fig
-
-    # ─────────────────────────────────────────────────────────────
-    # 1. VERTICAL BAR CHART (Reverted to "Straight" view)
-    # ─────────────────────────────────────────────────────────────
+    # 1. CATEGORICAL: BAR CHARTS
     useful_cats = [c for c in cat_cols if 1 < df[c].nunique() <= 30]
     for cat_col in useful_cats[:3]:
         if numeric_cols:
-            grouped = (df.groupby(cat_col)[numeric_cols[0]].sum()
-                         .reset_index()
-                         .sort_values(numeric_cols[0], ascending=False)
-                         .head(10))
+            num_col = numeric_cols[0]
+            grouped = (
+                df.groupby(cat_col)[num_col]
+                .sum()
+                .reset_index()
+                .sort_values(num_col, ascending=False)
+                .head(10)
+            )
             grouped.columns = [cat_col, "Value"]
-
             text_labels = [fmt_num(v) for v in grouped["Value"]]
 
             fig = go.Figure(go.Bar(
-                x=grouped[cat_col],
+                x=grouped[cat_col].astype(str),
                 y=grouped["Value"],
                 text=text_labels,
                 textposition="outside",
-                textfont=dict(size=12, color="#ffffff"),
+                textfont=dict(size=11, color="#ffffff"),
                 marker_color=COLORS[0],
                 marker_line_width=0,
-                hovertemplate=f"<b>%{{x}}</b><br>{numeric_cols[0]}: %{{text}}<extra></extra>",
+                hovertemplate=f"<b>%{{x}}</b><br>{num_col}: %{{text}}<extra></extra>",
             ))
-            fix_yaxis(fig)
-            fig.update_xaxes(title_text=cat_col.replace("_"," ").title())
-            fig.update_yaxes(title_text=numeric_cols[0].replace("_"," ").title())
-            charts.append(finalize(fig,
-                f"Top 10 {cat_col.replace('_',' ').title()} by {numeric_cols[0].replace('_',' ').title()}",
-                "Straight vertical bars — sorted highest to lowest",
-                chart_type="categorical"))
+            fig.update_xaxes(title_text=cat_col.replace("_", " ").title())
+            fig.update_yaxes(title_text=num_col.replace("_", " ").title())
+            charts.append(finalize(
+                fig,
+                f"Top 10 {cat_col.replace('_', ' ').title()} by {num_col.replace('_', ' ').title()}",
+                "Bar chart ranking",
+                chart_type="categorical",
+                rotate_x=True
+            ))
 
-        # Count chart
+        # Frequency Count Bar Chart
         counts = df[cat_col].value_counts().reset_index().head(10)
         counts.columns = [cat_col, "Count"]
         text_labels = [fmt_num(v) for v in counts["Count"]]
 
         fig = go.Figure(go.Bar(
-            x=counts[cat_col],
+            x=counts[cat_col].astype(str),
             y=counts["Count"],
             text=text_labels,
             textposition="outside",
-            textfont=dict(size=12, color="#ffffff"),
+            textfont=dict(size=11, color="#ffffff"),
             marker=dict(
                 color=counts["Count"],
                 colorscale="Blues",
                 showscale=False,
-                line_width=0,
+                line_width=0
             ),
             hovertemplate="<b>%{x}</b><br>Count: %{text}<extra></extra>",
         ))
-        fix_yaxis(fig)
-        fig.update_xaxes(title_text=cat_col.replace("_"," ").title())
-        fig.update_yaxes(title_text="Number of Records")
-        charts.append(finalize(fig,
-            f"Distribution of {cat_col.replace('_',' ').title()}",
-            "Straight vertical view — Frequency count (Top 10)",
-            chart_type="categorical"))
+        fig.update_xaxes(title_text=cat_col.replace("_", " ").title())
+        fig.update_yaxes(title_text="Count")
+        charts.append(finalize(
+            fig,
+            f"Distribution of {cat_col.replace('_', ' ').title()}",
+            "Category frequency count",
+            chart_type="categorical",
+            rotate_x=True
+        ))
 
-    # ─────────────────────────────────────────────────────────────
-    # 2. PIE / DONUT
-    # ─────────────────────────────────────────────────────────────
+    # 2. CATEGORICAL: PIE / DONUT CHART
     for col in cat_cols:
         if 2 <= df[col].nunique() <= 8:
             counts = df[col].value_counts().reset_index()
             counts.columns = [col, "Count"]
             fig = go.Figure(go.Pie(
-                labels=counts[col],
+                labels=counts[col].astype(str),
                 values=counts["Count"],
                 hole=0.45,
                 textinfo="label+percent",
-                textfont=dict(size=13),
-                marker=dict(colors=COLORS, line=dict(color="rgba(0,0,0,0)", width=2)),
-                pull=[0.03] * len(counts),
+                textfont=dict(size=12),
+                marker=dict(colors=COLORS, line=dict(color="rgba(0,0,0,0)", width=1)),
                 hovertemplate="<b>%{label}</b><br>Count: %{value}<br>Share: %{percent}<extra></extra>",
             ))
-            charts.append(finalize(fig,
-                f"Share of {col.replace('_',' ').title()}",
-                "Each slice shows the percentage of total records",
-                chart_type="categorical"))
+            charts.append(finalize(
+                fig,
+                f"Share of {col.replace('_', ' ').title()}",
+                "Proportional breakdown",
+                chart_type="categorical"
+            ))
             break
 
-    # ─────────────────────────────────────────────────────────────
-    # 3. HISTOGRAM (Standard X-axis)
-    # ─────────────────────────────────────────────────────────────
+    # 3. DISTRIBUTION: HISTOGRAMS
     for col in numeric_cols[:3]:
         if df[col].nunique() < 2:
             continue
-        mean_v   = df[col].mean()
+        mean_v = df[col].mean()
         median_v = df[col].median()
-        fig = px.histogram(df, x=col, nbins=30,
-                           color_discrete_sequence=[COLORS[0]])
-        fix_yaxis(fig)
-        fig.add_vline(x=mean_v,   line_dash="dash", line_color="#ffd200",
-                      annotation_text=f"Mean: {fmt_num(mean_v)}",
-                      annotation_position="top right",
-                      annotation_font=dict(size=11, color="#ffd200"))
-        fig.add_vline(x=median_v, line_dash="dot",  line_color="#38ef7d",
-                      annotation_text=f"Median: {fmt_num(median_v)}",
-                      annotation_position="top left",
-                      annotation_font=dict(size=11, color="#38ef7d"))
-        fig.update_xaxes(title_text=col.replace("_"," ").title())
+        fig = px.histogram(
+            df, x=col, nbins=25,
+            color_discrete_sequence=[COLORS[1]]
+        )
+        fig.add_vline(
+            x=mean_v, line_dash="dash", line_color="#f59e0b",
+            annotation_text=f"Mean: {fmt_num(mean_v)}",
+            annotation_position="top right",
+            annotation_font=dict(size=10, color="#f59e0b")
+        )
+        fig.add_vline(
+            x=median_v, line_dash="dot", line_color="#10b981",
+            annotation_text=f"Median: {fmt_num(median_v)}",
+            annotation_position="top left",
+            annotation_font=dict(size=10, color="#10b981")
+        )
+        fig.update_xaxes(title_text=col.replace("_", " ").title())
         fig.update_yaxes(title_text="Frequency")
-        charts.append(finalize(fig,
-            f"How {col.replace('_',' ').title()} is Distributed",
-            "Histogram view",
-            chart_type="distribution"))
+        charts.append(finalize(
+            fig,
+            f"Distribution of {col.replace('_', ' ').title()}",
+            "Histogram with mean & median indicators",
+            chart_type="distribution"
+        ))
 
-    # ─────────────────────────────────────────────────────────────
-    # 4. BOX PLOT (Vertical again)
-    # ─────────────────────────────────────────────────────────────
+    # 4. DISTRIBUTION: BOX PLOTS
     if numeric_cols:
         cols_for_box = numeric_cols[:4]
         fig = go.Figure()
         for i, col in enumerate(cols_for_box):
             fig.add_trace(go.Box(
                 y=df[col],
-                name=col.replace("_"," ").title(),
+                name=col.replace("_", " ").title(),
                 marker_color=COLORS[i % len(COLORS)],
                 boxmean=True,
                 hovertemplate="<b>%{x}</b><br>Value: %{y}<extra></extra>",
             ))
-        fix_yaxis(fig)
-        charts.append(finalize(fig,
-            "Outlier & Range Overview",
-            "Straight vertical box plots",
-            chart_type="distribution"))
+        charts.append(finalize(
+            fig,
+            "Outlier & Spread Overview",
+            "Box plot distribution of key numerical variables",
+            chart_type="distribution",
+            rotate_x=True
+        ))
 
-    # ─────────────────────────────────────────────────────────────
-    # 5. STACKED BAR (Vertical)
-    # ─────────────────────────────────────────────────────────────
-    if len(useful_cats) >= 2 and numeric_cols:
-        xc, cc = useful_cats[0], useful_cats[1]
-        if df[xc].nunique() <= 15 and df[cc].nunique() <= 6:
-            grouped = (df.groupby([xc, cc])[numeric_cols[0]].sum()
-                         .reset_index()
-                         .sort_values(numeric_cols[0], ascending=False))
-            top_x = df[xc].value_counts().head(8).index
-            grouped = grouped[grouped[xc].isin(top_x)]
-            fig = px.bar(grouped, x=xc, y=numeric_cols[0], color=cc,
-                         barmode="group",
-                         color_discrete_sequence=COLORS,
-                         labels={xc: xc.replace("_"," ").title(),
-                                 numeric_cols[0]: numeric_cols[0].replace("_"," ").title(),
-                                 cc: cc.replace("_"," ").title()})
-            fix_yaxis(fig)
-            charts.append(finalize(fig,
-                f"{numeric_cols[0].replace('_',' ').title()} by {xc.replace('_',' ').title()} & {cc.replace('_',' ').title()}",
-                "Grouped vertical bars",
-                chart_type="categorical"))
-
-    # ── Heatmap, Scatter, Line remain standard (they were already "straight") ──
+    # 5. RELATIONSHIP: CORRELATION HEATMAP
     if len(numeric_cols) >= 2:
-        corr = df[numeric_cols].corr().round(2)
-        fig = px.imshow(corr, text_auto=True, color_continuous_scale="RdBu_r", zmin=-1, zmax=1)
-        charts.append(finalize(fig, "Correlation Matrix", "", chart_type="relationship"))
+        corr_df = df[numeric_cols].corr().round(2)
+        fig = px.imshow(
+            corr_df,
+            text_auto=True,
+            color_continuous_scale="Blues",
+            zmin=-1, zmax=1
+        )
+        charts.append(finalize(
+            fig,
+            "Correlation Heatmap",
+            "Pairwise linear correlation matrix",
+            chart_type="relationship",
+            rotate_x=True
+        ))
 
-    # SCATTER
+    # 6. RELATIONSHIP: SCATTER PLOT
     if len(numeric_cols) >= 2:
-        try:
-            import statsmodels
-            tl = "ols"
-        except ImportError:
-            tl = None
         for i in range(min(2, len(numeric_cols) - 1)):
-            fig = px.scatter(df, x=numeric_cols[i], y=numeric_cols[i+1], trendline=tl, opacity=0.6)
-            fix_yaxis(fig)
-            charts.append(finalize(fig, f"{numeric_cols[i]} vs {numeric_cols[i+1]}", "", chart_type="relationship"))
+            c1, c2 = numeric_cols[i], numeric_cols[i + 1]
+            fig = px.scatter(
+                df, x=c1, y=c2,
+                opacity=0.7,
+                color_discrete_sequence=[COLORS[0]]
+            )
+            fig.update_xaxes(title_text=c1.replace("_", " ").title())
+            fig.update_yaxes(title_text=c2.replace("_", " ").title())
+            charts.append(finalize(
+                fig,
+                f"{c1.replace('_', ' ').title()} vs {c2.replace('_', ' ').title()}",
+                "Bivariate scatter plot",
+                chart_type="relationship"
+            ))
 
-    # TIME SERIES
+    # 7. RELATIONSHIP: LINE / TREND CHART
+    date_col = None
     for col in cat_cols + numeric_cols:
-        if any(k in col.lower() for k in ("year","date","month","time")):
-            try:
-                tmp = df.copy()
-                if df[col].dtype == "object": tmp[col] = pd.to_datetime(df[col], errors="coerce")
-                if not tmp[col].isnull().all() and numeric_cols:
-                    trend = tmp.sort_values(col).groupby(col)[numeric_cols[0]].mean().reset_index()
-                    fig = px.line(trend, x=col, y=numeric_cols[0], markers=True)
-                    fix_yaxis(fig)
-                    charts.append(finalize(fig, f"Trend: {numeric_cols[0]} over {col}", "", chart_type="relationship"))
-            except: pass
+        if any(k in col.lower() for k in ["date", "time", "year", "month", "day"]):
+            date_col = col
+            break
+
+    if date_col and numeric_cols:
+        try:
+            tmp = df.copy()
+            if tmp[date_col].dtype == "object":
+                tmp[date_col] = pd.to_datetime(tmp[date_col], errors="coerce")
+            trend = tmp.sort_values(date_col).groupby(date_col)[numeric_cols[0]].mean().reset_index()
+            fig = px.line(
+                trend, x=date_col, y=numeric_cols[0],
+                markers=True,
+                color_discrete_sequence=[COLORS[2]]
+            )
+            fig.update_xaxes(title_text=date_col.replace("_", " ").title())
+            fig.update_yaxes(title_text=numeric_cols[0].replace("_", " ").title())
+            charts.append(finalize(
+                fig,
+                f"Trend: {numeric_cols[0].replace('_', ' ').title()} over {date_col.replace('_', ' ').title()}",
+                "Time series trend analysis",
+                chart_type="relationship",
+                rotate_x=True
+            ))
+        except Exception:
+            pass
 
     return charts[:20]

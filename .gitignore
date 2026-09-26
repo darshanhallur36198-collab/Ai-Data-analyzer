@@ -3,6 +3,8 @@ __pycache__/
 venv/
 env/
 .env
+backend/.env
+*.env
 *.pyc
 backend/uploads/*
 !backend/uploads/.gitkeep

@@ -4,219 +4,304 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Autonomous Data Analyst | Professional BI</title>
+    <title>AI-Assisted Data Analysis — Automated Visualization & Prediction</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 </head>
 
 <body>
 
-    <!-- ═══ SIDEBAR ════════════════════════════════════════════════════ -->
-    <div class="sidebar">
-        <div class="logo">📊 <span>AI Analyst</span></div>
-        <ul class="nav-links">
-            <li class="nav-item active" data-section="section-dashboard">
-                <span class="nav-icon">🏠</span><span>Dashboard</span>
-            </li>
-            <li class="nav-item" data-section="section-graphs">
-                <span class="nav-icon">📈</span><span>Graphs</span>
-            </li>
-            <li class="nav-item" data-section="section-cleaning">
-                <span class="nav-icon">🧹</span><span>Data Cleaning</span>
-            </li>
-            <li class="nav-item" data-section="section-ml">
-                <span class="nav-icon">🤖</span><span>ML Predictions</span>
-            </li>
-            <li class="nav-item" data-section="section-chat" style="background-image: linear-gradient(135deg, rgba(157, 149, 255, 0.1), rgba(62, 198, 224, 0.1));">
-                <span class="nav-icon">💬</span><span>Chat with Data</span>
-            </li>
-            <li class="nav-item" data-section="section-reports">
-                <span class="nav-icon">📑</span><span>Reports</span>
-            </li>
-            <li class="nav-item" data-section="section-settings">
-                <span class="nav-icon">⚙️</span><span>Settings</span>
-            </li>
-        </ul>
+    <!-- ═══ WELCOME / LANDING PAGE ═══════════════════════════════════════ -->
+    <div id="welcome-page" class="welcome-container">
+        <div class="welcome-content">
+            <!-- Real Brand Logo -->
+            <img src="assets/images/logo.png" alt="AI Data Analyzer Logo" class="welcome-logo-img" />
+
+            <!-- Project Subtitle -->
+            <p class="welcome-subtitle">Analyze. Visualize. Predict. Understand your data with AI.</p>
+
+            <!-- Short Description -->
+            <p class="welcome-description">
+                Upload your dataset and automatically clean, analyze, visualize and build machine-learning predictions
+                from your data.
+            </p>
+
+            <!-- Start Button -->
+            <button id="start-btn" class="welcome-btn" onclick="startApp()">
+                Let's Start <span class="btn-arrow">→</span>
+            </button>
+        </div>
     </div>
 
-    <!-- ═══ MAIN CONTENT ═══════════════════════════════════════════════ -->
-    <div class="main-content">
-        <!-- Shared Header -->
-        <header class="dashboard-header">
-            <div>
-                <h1 id="page-title">Ai Dataset Analytics</h1>
-                <p id="page-subtitle" style="color:var(--text-secondary)">Upload a dataset to begin autonomous analysis
-                </p>
-            </div>
-            <div id="loader" class="loading">
-                <div class="spinner"></div> Processing...
-            </div>
-        </header>
+    <!-- ═══ MAIN DASHBOARD CONTAINER (Initially Hidden) ═════════════════ -->
+    <div id="app-container" class="app-container app-hidden">
 
-        <!-- KPI Bar (shown after analysis) -->
-        <div class="kpi-container" id="kpi-box" style="display:none">
-            <div class="kpi-card">
-                <span class="kpi-label">Total Rows</span>
-                <span id="kpi-rows" class="kpi-val">—</span>
+        <!-- ═══ SIDEBAR NAVIGATION ═════════════════════════════════════ -->
+        <div class="sidebar">
+            <div class="logo">
+                <img src="assets/images/logo.png" alt="AI Data Analyzer Logo" class="sidebar-logo-img" />
+                <span class="logo-text">AI Analyst</span>
             </div>
-            <div class="kpi-card">
-                <span class="kpi-label">Columns</span>
-                <span id="kpi-cols" class="kpi-val">—</span>
-            </div>
-            <div class="kpi-card">
-                <span class="kpi-label">Data Health</span>
-                <span id="kpi-health" class="kpi-val">—</span>
-            </div>
-            <div class="kpi-card">
-                <span class="kpi-label">AI Insights</span>
-                <span id="kpi-insights" class="kpi-val">—</span>
+
+            <ul class="nav-links">
+                <li class="nav-item active" data-section="section-dashboard">
+                    <span class="nav-icon">🏠</span><span>Dashboard</span>
+                </li>
+                <li class="nav-item" data-section="section-overview">
+                    <span class="nav-icon">📋</span><span>Data Overview</span>
+                </li>
+                <li class="nav-item" data-section="section-cleaning">
+                    <span class="nav-icon">🧹</span><span>Data Cleaning</span>
+                </li>
+                <li class="nav-item" data-section="section-visualizations">
+                    <span class="nav-icon">📈</span><span>Visualizations</span>
+                </li>
+                <li class="nav-item" data-section="section-ml">
+                    <span class="nav-icon">🤖</span><span>Machine Learning</span>
+                </li>
+                <li class="nav-item" data-section="section-predict">
+                    <span class="nav-icon">🎯</span><span>Live Prediction</span>
+                </li>
+                <li class="nav-item" data-section="section-chat">
+                    <span class="nav-icon">💬</span><span>AI Assistant</span>
+                </li>
+                <li class="nav-item" data-section="section-reports">
+                    <span class="nav-icon">📄</span><span>Report</span>
+                </li>
+                <li class="nav-item" data-section="section-settings">
+                    <span class="nav-icon">⚙️</span><span>Settings</span>
+                </li>
+            </ul>
+
+            <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                <button class="btn-clear-sidebar" onclick="clearAll()">
+                    🗑️ Clear & Reset
+                </button>
             </div>
         </div>
 
-        <!-- ══ SECTION: DASHBOARD ══════════════════════════════════════ -->
-        <section id="section-dashboard" class="page-section active-section">
-            <!-- Upload Zone - AUTO analysis on file pick -->
-            <div class="upload-sect" id="drop-zone">
-                <div class="upload-icon">⬆️</div>
-                <h3>Drop Your Dataset Here</h3>
-                <p>Or click to browse — analysis starts <strong style="color:#9d95ff">automatically</strong></p>
-                <p style="font-size:0.78rem; color:var(--text-secondary); margin-top:6px">
-                    CSV &bull; TSV &bull; XLSX &bull; XLS &bull; JSON &bull; Parquet &bull; ODS
-                </p>
-                <input type="file" id="dataset" accept=".csv,.tsv,.txt,.xlsx,.xls,.json,.parquet,.ods"
-                    style="display:none">
-                <button class="btn-primary" style="margin-top:20px"
-                    onclick="document.getElementById('dataset').click()">
-                    📂 Choose File
-                </button>
-                <p id="file-name" style="margin-top:14px; font-weight:600; color:#9d95ff;"></p>
+        <!-- ═══ MAIN CONTENT AREA ══════════════════════════════════════ -->
+        <div class="main-content">
+            <!-- Dashboard Header -->
+            <header class="dashboard-header">
+                <div>
+                    <h1 id="page-title">AI Dataset Analytics</h1>
+                    <p id="page-subtitle">Upload a dataset to begin automated data processing, ML training, and
+                        predictions</p>
+                </div>
+                <div id="loader" class="loading">
+                    <div class="spinner"></div> Processing...
+                </div>
+            </header>
 
-                <!-- Progress Bar -->
-                <div id="progress-wrap" style="display:none; margin-top:18px">
-                    <div id="progress-bar" class="progress-bar"></div>
-                    <p id="progress-label" class="progress-label">Loading dataset…</p>
+            <!-- Dynamic KPI Bar (Shown after dataset analysis) -->
+            <div class="kpi-container" id="kpi-box" style="display:none">
+                <div class="kpi-card">
+                    <span class="kpi-label">Clean Dataset Rows</span>
+                    <span id="kpi-rows" class="kpi-val">—</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Total Features</span>
+                    <span id="kpi-cols" class="kpi-val">—</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Data Quality Score</span>
+                    <span id="kpi-health" class="kpi-val">—</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">AI Key Insights</span>
+                    <span id="kpi-insights" class="kpi-val">—</span>
                 </div>
             </div>
 
-            <!-- AI Insight Bubbles -->
-            <div id="ai-assistant" class="assistant-panel" style="display:none; margin-top:25px">
-                <div class="chart-header">✨ AI Narrative Insights</div>
-                <div id="ai-bubbles"></div>
-            </div>
+            <!-- ══ SECTION 1: DASHBOARD ═════════════════════════════════════ -->
+            <section id="section-dashboard" class="page-section active-section">
+                <div class="upload-sect" id="drop-zone-dash">
+                    <div class="upload-icon">📁</div>
+                    <h3>Drop Your Dataset File Here</h3>
+                    <p>Upload CSV, TSV, Excel, JSON, Parquet, or ODS — analysis runs automatically</p>
+                    <input type="file" id="dataset-dash" accept=".csv,.tsv,.txt,.xlsx,.xls,.json,.parquet,.ods"
+                        style="display:none">
+                    <button class="btn-primary" style="margin-top:16px"
+                        onclick="document.getElementById('dataset-dash').click()">
+                        📂 Browse Files
+                    </button>
+                    <p id="file-name-dash" class="file-name-tag"></p>
 
-            <!-- Charts Grid -->
-            <div id="chart-container" class="chart-grid" style="margin-top:25px"></div>
-        </section>
-
-        <!-- ══ SECTION: GRAPHS ═══════════════════════════════════════ -->
-        <section id="section-graphs" class="page-section">
-            <div class="chart-card" style="margin-bottom:25px">
-                <div class="chart-header">📈 Interactive Visualization Suite</div>
-                <div id="graph-controls" style="display:flex; gap:12px; flex-wrap:wrap; margin-top:5px">
-                    <button class="filter-btn active" data-filter="all">All Charts</button>
-                    <button class="filter-btn" data-filter="distribution">Distribution</button>
-                    <button class="filter-btn" data-filter="categorical">Categorical</button>
-                    <button class="filter-btn" data-filter="relationship">Relationships</button>
-                </div>
-            </div>
-            <div id="all-charts-container" class="chart-grid">
-                <div class="empty-state" style="grid-column:1/-1">
-                    📊 Run an analysis on the Dashboard to generate interactive graphs here.
-                </div>
-            </div>
-        </section>
-
-        <!-- ══ SECTION: DATA CLEANING ══════════════════════════════════ -->
-        <section id="section-cleaning" class="page-section">
-            <div class="chart-card">
-                <div class="chart-header">🧹 Automatic Data Cleaning Report</div>
-                <div id="cleaning-info" class="empty-state">
-                    Upload and analyze a dataset first to see the cleaning report.
-                </div>
-            </div>
-        </section>
-
-        <!-- ══ SECTION: ML PREDICTIONS ════════════════════════════════ -->
-        <section id="section-ml" class="page-section">
-            <div class="chart-card">
-                <div class="chart-header">🤖 Machine Learning Predictions</div>
-                <div id="ml-result" class="empty-state">
-                    Upload and analyze a dataset first to see predictions.
-                </div>
-            </div>
-        </section>
-
-        <!-- ══ SECTION: CHAT WITH DATA ════════════════════════════════ -->
-        <section id="section-chat" class="page-section">
-            <div class="chart-card" style="display:flex; flex-direction:column; height: 75vh;">
-                <div class="chart-header" style="display:flex; justify-content: space-between; align-items: center;">
-                    <span>💬 Ask Questions About Your Data</span>
-                    <span style="font-size: 0.8rem; font-weight: normal; color: #9d95ff;">(Powered by Gemini)</span>
-                </div>
-                
-                <div id="chat-messages" style="flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:15px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <div class="empty-state" id="chat-empty-state">
-                        Ask natural language questions like: <br>
-                        <i style="color:#38ef7d">"Why did sales drop last month?"</i> or <br>
-                        <i style="color:#f7971e">"Which product is underperforming?"</i>
+                    <!-- Loading Progress Bar -->
+                    <div id="progress-wrap-dash" class="progress-wrap" style="display:none">
+                        <div id="progress-bar-dash" class="progress-bar"></div>
+                        <p id="progress-label-dash" class="progress-label">Reading dataset...</p>
                     </div>
                 </div>
 
-                <div style="display:flex; gap:10px; padding: 15px;">
-                    <input type="text" id="chat-input" class="setting-input" style="flex:1;" placeholder="Ask a question about your dataset...">
-                    <button class="btn-primary" id="chat-send-btn" onclick="sendChatQuery()">🚀 Ask AI</button>
+                <!-- AI Narrative Insights -->
+                <div id="ai-assistant" class="assistant-panel" style="display:none">
+                    <div class="panel-header">✨ AI Executive Insights</div>
+                    <div id="ai-bubbles"></div>
                 </div>
-            </div>
-        </section>
 
-        <!-- ══ SECTION: REPORTS ════════════════════════════════════════ -->
-        <section id="section-reports" class="page-section">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px">
-                <h3 style="color:var(--text-primary); margin:0">Full Statistical Export</h3>
-                <button class="btn-primary" onclick="downloadReport()" style="padding:8px 16px; font-size:0.85rem">📥
-                    Download JSON Report</button>
-            </div>
-            <pre id="result" class="code-block">No report generated yet. Upload a dataset to see details.</pre>
-        </section>
+                <!-- Dashboard Charts Preview (Vertical Stack) -->
+                <div id="chart-container" class="chart-grid"></div>
+            </section>
 
-        <!-- ══ SECTION: SETTINGS ══════════════════════════════════════ -->
-        <section id="section-settings" class="page-section">
-            <div class="chart-card">
-                <div class="chart-header">⚙️ Settings</div>
-                <div style="padding:10px; display:flex; flex-direction:column; gap:20px;">
-                    <div class="setting-row">
-                        <label class="setting-label">Backend API URL</label>
-                        <input id="setting-api-url" class="setting-input" type="text" value="http://localhost:8000">
+            <!-- ══ SECTION 2: DATA OVERVIEW ═════════════════════════════════ -->
+            <section id="section-overview" class="page-section">
+                <div class="card-box">
+                    <div class="card-header">📋 Dataset Overview & Metadata</div>
+                    <div id="overview-content" class="empty-state">
+                        Upload and analyze a dataset to view shape, column types, and data quality details.
                     </div>
-                    <div class="setting-row">
-                        <label class="setting-label">Max Charts to Display</label>
-                        <input id="setting-max-charts" class="setting-input" type="number" value="12" min="1" max="30">
+                </div>
+            </section>
+
+            <!-- ══ SECTION 3: DATA CLEANING ═════════════════════════════════ -->
+            <section id="section-cleaning" class="page-section">
+                <div class="card-box">
+                    <div class="card-header">🧹 Automatic Data Cleaning Report</div>
+                    <div id="cleaning-info" class="empty-state">
+                        Upload a dataset to generate the Before vs After cleaning report.
                     </div>
-                    <div class="setting-row">
-                        <label class="setting-label">Google Gemini API Key</label>
-                        <input id="setting-gemini-key" class="setting-input" type="password" placeholder="AIZAy... (Required for Chat)">
+                </div>
+            </section>
+
+            <!-- ══ SECTION 4: VISUALIZATIONS ════════════════════════════════ -->
+            <section id="section-visualizations" class="page-section">
+                <div class="card-box" style="margin-bottom:20px">
+                    <div class="card-header">📈 Generated Visualizations</div>
+                    <div id="graph-controls" class="filter-bar">
+                        <button class="filter-btn active" data-filter="all">All Charts</button>
+                        <button class="filter-btn" data-filter="distribution">Distribution</button>
+                        <button class="filter-btn" data-filter="categorical">Categorical</button>
+                        <button class="filter-btn" data-filter="relationship">Relationships</button>
                     </div>
-                    <div class="setting-row">
-                        <label class="setting-label">Theme</label>
-                        <div style="position:relative; max-width:400px">
-                            <select id="setting-theme" class="setting-input"
-                                style="width:100%; cursor:pointer; padding-right:36px">
-                                <option value="plotly_dark" selected>🌙 Dark (Recommended)</option>
-                                <option value="plotly">☀️ Light</option>
-                                <option value="ggplot2">📊 GGPlot</option>
-                                <option value="seaborn">🎨 Seaborn</option>
-                                <option value="simple_white">⬜ Simple White</option>
+                </div>
+                <div id="all-charts-container" class="chart-grid">
+                    <div class="empty-state" style="grid-column:1/-1">
+                        📊 Upload a dataset on the Dashboard to view interactive Plotly charts here.
+                    </div>
+                </div>
+            </section>
+
+            <!-- ══ SECTION 5: MACHINE LEARNING ══════════════════════════════ -->
+            <section id="section-ml" class="page-section">
+                <div class="card-box">
+                    <div class="card-header">🤖 Automated Machine Learning Model</div>
+
+                    <!-- Target Column Selection -->
+                    <div class="target-select-container">
+                        <label for="target-col-select" class="form-label">Select Target Column:</label>
+                        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+                            <select id="target-col-select" class="form-select" disabled>
+                                <option value="">Upload a dataset first</option>
                             </select>
-                            <span
-                                style="position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; color:#9d95ff">▼</span>
+                            <button id="btn-train-ml" class="btn-primary" onclick="onTargetColumnChange()" disabled>
+                                ⚡ Train Model
+                            </button>
                         </div>
                     </div>
-                    <button class="btn-primary" style="width:160px; margin-top:10px" onclick="saveSettings()">💾 Save
-                        Settings</button>
-                    <p id="settings-msg" style="color:#38ef7d; font-size:0.9rem; display:none">✅ Settings saved!</p>
+
+                    <div id="ml-result" class="empty-state" style="margin-top:20px">
+                        Upload and analyze a dataset first to configure and train machine learning models.
+                    </div>
                 </div>
-            </div>
-        </section>
+            </section>
+
+            <!-- ══ SECTION 6: LIVE PREDICTION ═══════════════════════════════ -->
+            <section id="section-predict" class="page-section">
+                <div class="card-box">
+                    <div class="card-header">🎯 Live Prediction Calculator</div>
+                    <p style="color:var(--text-secondary); margin-bottom:20px; font-size:0.95rem">
+                        Enter custom feature values below to get real-time model predictions.
+                    </p>
+
+                    <div id="predict-form-container">
+                        <div class="empty-state">
+                            Train a machine learning model first to generate the live prediction calculator.
+                        </div>
+                    </div>
+
+                    <div id="predict-output" style="margin-top:24px"></div>
+                </div>
+            </section>
+
+            <!-- ══ SECTION 7: AI ASSISTANT ══════════════════════════════════ -->
+            <section id="section-chat" class="page-section">
+                <div class="card-box" style="display:flex; flex-direction:column; height: 75vh;">
+                    <div class="card-header" style="display:flex; justify-content: space-between; align-items: center;">
+                        <span>💬 AI Dataset Assistant</span>
+                        <span style="font-size: 0.8rem; font-weight: normal; color: var(--accent-color);">(Powered by
+                            Gemini API)</span>
+                    </div>
+
+                    <div id="chat-messages" class="chat-box">
+                        <div class="empty-state" id="chat-empty-state">
+                            Ask questions about your uploaded dataset, such as:<br>
+                            <em style="color:var(--accent-color)">"Summarize the key correlations in this dataset."</em>
+                            or<br>
+                            <em style="color:var(--accent-secondary)">"Which features have the highest impact on
+                                predictions?"</em>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:12px; padding-top: 16px;">
+                        <input type="text" id="chat-input" class="form-input" style="flex:1;"
+                            placeholder="Ask a question about your dataset...">
+                        <button class="btn-primary" id="chat-send-btn" onclick="sendChatQuery()">🚀 Ask AI</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ══ SECTION 8: REPORTS ═══════════════════════════════════════ -->
+            <section id="section-reports" class="page-section">
+                <div class="card-box">
+                    <div
+                        style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px">
+                        <div class="card-header" style="margin:0; border:none; padding:0">📄 Analysis Report &
+                            Statistical Export</div>
+                        <div style="display:flex; gap:10px">
+                            <button class="btn-primary" onclick="downloadTextReport()">📥 Download Text Report</button>
+                            <button class="btn-secondary" onclick="downloadReport()">📥 Download JSON</button>
+                        </div>
+                    </div>
+                    <pre id="result"
+                        class="code-block">No report generated yet. Upload a dataset to view full report.</pre>
+                </div>
+            </section>
+
+            <!-- ══ SECTION 9: SETTINGS ══════════════════════════════════════ -->
+            <section id="section-settings" class="page-section">
+                <div class="card-box">
+                    <div class="card-header">⚙️ Application Settings</div>
+                    <div style="display:flex; flex-direction:column; gap:20px; max-width:500px">
+                        <div class="setting-group">
+                            <label class="form-label" for="setting-max-charts">Max Charts to Display</label>
+                            <input id="setting-max-charts" class="form-input" type="number" value="12" min="1" max="30">
+                        </div>
+                        <div class="setting-group">
+                            <label class="form-label" for="setting-gemini-key">Google Gemini API Key (Optional
+                                Override)</label>
+                            <input id="setting-gemini-key" class="form-input" type="password"
+                                placeholder="AIZAy... (Backend .env configured by default)">
+                        </div>
+                        <div class="setting-group">
+                            <label class="form-label" for="setting-theme">Chart Theme</label>
+                            <select id="setting-theme" class="form-select">
+                                <option value="plotly_dark" selected>🌙 Dark Mode (Classic)</option>
+                                <option value="plotly">☀️ Light Mode</option>
+                                <option value="ggplot2">📊 GGPlot2</option>
+                                <option value="seaborn">🎨 Seaborn</option>
+                            </select>
+                        </div>
+                        <button class="btn-primary" onclick="saveSettings()">💾 Save Settings</button>
+                        <p id="settings-msg" style="color:#10b981; font-weight:600; font-size:0.9rem; display:none">
+                            ✅ Settings saved successfully!
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+        </div>
     </div>
 
     <script src="app.js"></script>

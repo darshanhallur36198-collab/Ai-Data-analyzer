@@ -3,100 +3,149 @@ import pandas as pd
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-load_dotenv()
+# ─── Load environment from backend/.env ───────────────────────────────────────
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
+
+# ─── Central Model Configuration ──────────────────────────────────────────────
+# Update GEMINI_MODEL here to change the model across the entire backend.
+GEMINI_MODEL = "gemini-3.8-flash"
+
+# Ordered fallback list: primary model first, then stable legacy options
+GEMINI_FALLBACK_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-3.5-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+]
+
+# ─── User-Friendly Error Messages ─────────────────────────────────────────────
+def _friendly_error(raw_error: str) -> str:
+    """Map technical Gemini API errors to friendly user-facing messages."""
+    err = str(raw_error).lower()
+    if "401" in err or "403" in err or "api_key_invalid" in err or "unauthorized" in err:
+        return (
+            "⚠️ AI Assistant is temporarily unavailable.\n"
+            "The Gemini API key appears to be invalid or unauthorized.\n"
+            "Please check that **GEMINI_API_KEY** is correctly set in **backend/.env** and restart the server."
+        )
+    if "404" in err or "not found" in err or "no longer available" in err:
+        return (
+            "⚠️ AI Assistant is temporarily unavailable.\n"
+            "The configured Gemini model could not be reached (model may be deprecated).\n"
+            "The system has attempted to fall back to an alternative model automatically."
+        )
+    if "429" in err or "quota" in err or "rate" in err:
+        return (
+            "⚠️ AI rate limit reached.\n"
+            "You've sent too many requests in a short time. Please wait a moment and try again."
+        )
+    if "500" in err or "503" in err or "unavailable" in err:
+        return (
+            "⚠️ Gemini service is temporarily unavailable.\n"
+            "Google's AI service may be experiencing issues. Please try again in a few minutes."
+        )
+    return (
+        "⚠️ AI Assistant encountered an unexpected error.\n"
+        "Please check the API configuration and try again."
+    )
+
 
 def chat_with_data(file_path: str, query: str, api_key: str = None) -> str:
-    # Use provided API key or fallback to environment variable
-    key_to_use = api_key or os.getenv("GOOGLE_API_KEY")
-    if not key_to_use:
-        return "Error: Please provide a Google Gemini API Key in the settings."
+    """
+    Sends a dataset-context-aware question to Gemini and returns the AI response.
+    - API key is loaded ONLY from the backend .env file (never from the frontend).
+    - Sends compact summaries, never full raw datasets.
+    - Applies user-friendly error messages for common failure modes.
+    """
+    # API key: backend .env takes priority; never rely on frontend-submitted key
+    key_to_use = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
+    if not key_to_use:
+        return (
+            "⚠️ AI Assistant is not configured.\n"
+            "**GEMINI_API_KEY** is missing from **backend/.env**.\n"
+            "Add your key to `backend/.env` and restart the server."
+        )
+
+    # Configure Gemini SDK
     try:
         genai.configure(api_key=key_to_use)
-        # We can use gemini-1.5-flash as it's fast and has a large context window
-        try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            # Test if model is accessible
-            # We don't want to call it yet, so we just proceed
-        except Exception:
-            model = genai.GenerativeModel('gemini-pro')
-        
-        # Load dataset
-        try:
-            if file_path.endswith('.csv'):
-                df = pd.read_csv(file_path)
-            elif file_path.endswith('.xlsx') or file_path.endswith('.xls'):
-                df = pd.read_excel(file_path)
-            elif file_path.endswith('.json'):
-                df = pd.read_json(file_path)
-            elif file_path.endswith('.parquet'):
-                df = pd.read_parquet(file_path)
-            else:
-                return f"Error: Unsupported file format for chat ({file_path})."
-        except Exception as e:
-            return f"Error loading dataset: {str(e)}"
-        
-        # Prepare context payload
-        # Limit the rows to prevent token exhaustion, but give enough for context
-        row_limit = 1000  
-        sample_df = df.head(row_limit)
-        
-        data_info = f"Dataset Shape: {df.shape[0]} rows, {df.shape[1]} columns.\n\n"
-        data_info += f"Columns: {', '.join(df.columns.tolist())}\n\n"
-        
-        # We provide a rich summary (e.g. data types and descriptive stats)
-        # for numbers so the LLM can see totals without seeing every row
-        try:
-            summary = df.describe().to_string()
-            data_info += f"Numerical Summary:\n{summary}\n\n"
-        except:
-            pass
-            
-        # Give a substantial sample
-        data_info += f"Data Sample (First {len(sample_df)} rows):\n"
-        data_info += sample_df.to_csv(index=False)
-        
-        prompt = f"""You are an advanced AI Data Analyst. You are analyzing a dataset for a user.
-Here is information about the dataset:
-{data_info}
+    except Exception as e:
+        return _friendly_error(str(e))
 
-The user has asked the following question about the data:
-"{query}"
+    # Load dataset safely — only schema + stats, not all rows
+    try:
+        from backend.modules.data_loader import load_dataset
+        df = load_dataset(file_path)
+    except Exception as e:
+        return f"⚠️ Could not load dataset for context: {str(e)}"
 
-Please answer the user's question clearly and concisely based on the data provided. 
-If the data sample and summary provided do not contain enough information to fully answer the question (e.g., if there are too many rows missing from the sample), give the best answer you can from the summary, and briefly mention the limitation.
-Format your answer with markdown. Avoid providing code unless asked. Direct, professional, and insightful.
+    # Build compact dataset context (no full dump)
+    rows, cols = df.shape
+    col_names = df.columns.tolist()
+    col_dtypes = {col: str(df[col].dtype) for col in col_names}
+
+    context_lines = [
+        f"Dataset Overview:",
+        f"  - Total Rows: {rows}",
+        f"  - Total Columns: {cols}",
+        f"  - Column Names: {col_names}",
+        f"  - Data Types: {col_dtypes}",
+        "",
+    ]
+
+    # Statistical summary (safe subset)
+    try:
+        desc = df.describe(include="all").head(8).to_string()
+        context_lines += ["Statistical Summary:", desc, ""]
+    except Exception:
+        pass
+
+    # Missing value counts
+    try:
+        missing = df.isnull().sum()
+        missing_info = {col: int(cnt) for col, cnt in missing.items() if cnt > 0}
+        if missing_info:
+            context_lines += [f"Missing Values per Column: {missing_info}", ""]
+    except Exception:
+        pass
+
+    # Sample data (top 5 rows only)
+    try:
+        sample_csv = df.head(5).to_csv(index=False)
+        context_lines += ["Sample Data (First 5 Rows):", sample_csv, ""]
+    except Exception:
+        pass
+
+    context_summary = "\n".join(context_lines)
+
+    prompt = f"""You are an expert AI Data Analyst assistant helping a user understand their dataset.
+
+{context_summary}
+
+User's Question: "{query}"
+
+Instructions:
+- Answer clearly and concisely based strictly on the dataset context provided above.
+- Use Markdown formatting: **bold**, bullet points, headers where helpful.
+- Be professional, friendly, and precise.
+- Do NOT include raw code blocks unless the user explicitly asks for code.
+- If you cannot determine an answer from the provided summary, say so honestly.
 """
 
-        print(f"[DEBUG] AI Prompt length: {len(prompt)} chars")
-        
+    # Try models in order, fall back gracefully
+    last_error = None
+    for model_name in GEMINI_FALLBACK_MODELS:
         try:
+            model = genai.GenerativeModel(model_name)
             response = model.generate_content(prompt)
+            if response and hasattr(response, "text") and response.text:
+                return response.text
         except Exception as e:
-            if "404" in str(e):
-                print("[INFO] gemini-1.5-flash not found, falling back to gemini-pro")
-                model = genai.GenerativeModel('gemini-pro')
-                response = model.generate_content(prompt)
-            else:
-                raise e
-        
-        # Check if response has parts (avoid error on blocked content)
-        if not response or not hasattr(response, 'text'):
-             if hasattr(response, 'prompt_feedback'):
-                 return f"AI Error: Your query or the data was blocked by safety filters. Details: {response.prompt_feedback}"
-             return "AI Error: Received empty response from Gemini. Please try a simpler question."
-             
-        try:
-            return response.text
-        except ValueError:
-            return "AI Error: The AI response was blocked by safety filters during generation."
+            last_error = str(e)
+            # Don't retry on key auth failures — they will fail for every model
+            if any(code in str(e) for code in ["401", "403", "API_KEY_INVALID"]):
+                break
+            continue
 
-    except Exception as e:
-        print(f"[ERROR] Chat exception: {str(e)}")
-        if "403" in str(e):
-            return "AI Error (403): Gemini API Key is invalid or has insufficient permissions."
-        if "429" in str(e):
-            return "AI Error (429): Quota exceeded. Please wait a moment and try again."
-        if "404" in str(e):
-            return "AI Error (404): Model not found. Please ensure your Gemini API project has at least one active model."
-        return f"AI Error: {str(e)}"
+    return _friendly_error(last_error or "Unknown error")
