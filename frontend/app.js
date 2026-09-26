@@ -26,10 +26,16 @@ const PRODUCTION_API_URL = 'https://ai-data-analyzer-api.onrender.com';
 
 function getSettings() {
     let url = localStorage.getItem('api_url');
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    // Purge stale local API URLs from browser localStorage when running in production
+    if (!isLocalhost && url && (url.includes('localhost') || url.includes('127.0.0.1'))) {
+        localStorage.removeItem('api_url');
+        url = null;
+    }
+
     if (!url) {
-        url = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-            ? 'http://127.0.0.1:8000'
-            : PRODUCTION_API_URL;
+        url = isLocalhost ? 'http://127.0.0.1:8000' : PRODUCTION_API_URL;
     }
     return {
         apiUrl: url.replace(/\/+$/, ''),
