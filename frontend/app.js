@@ -486,12 +486,17 @@ function renderChart(chartData, index, container, prefix = 'c') {
     };
     delete layout.width;
 
-    Plotly.newPlot(plotId, JSON.parse(JSON.stringify(chartData.data)), layout, {
-        responsive: true,
-        displayModeBar: false,
-        scrollZoom: false,
-        staticPlot: false
-    });
+    try {
+        Plotly.newPlot(plotId, JSON.parse(JSON.stringify(chartData.data || [])), layout, {
+            responsive: true,
+            displayModeBar: false,
+            scrollZoom: false,
+            staticPlot: false
+        });
+    } catch (err) {
+        console.error(`Failed to render Plotly chart #${index}:`, err);
+        plotDiv.innerHTML = `<div class="empty-state" style="padding:20px; color:#ef4444">⚠️ Could not render chart ${index + 1}: ${err.message}</div>`;
+    }
 }
 
 // ─── Rotate / Orientation Toggle Function ──────────────────────
