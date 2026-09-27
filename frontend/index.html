@@ -275,6 +275,14 @@
                     <div class="card-header">⚙️ Application Settings</div>
                     <div style="display:flex; flex-direction:column; gap:20px; max-width:500px">
                         <div class="setting-group">
+                            <label class="form-label" for="setting-api-url">Backend API URL</label>
+                            <input id="setting-api-url" class="form-input" type="url"
+                                placeholder="e.g. https://your-backend-name.onrender.com or http://127.0.0.1:8000">
+                            <small style="color:var(--text-secondary); margin-top:4px; display:block">
+                                Configure your Render Backend service URL or local API server.
+                            </small>
+                        </div>
+                        <div class="setting-group">
                             <label class="form-label" for="setting-max-charts">Max Charts to Display</label>
                             <input id="setting-max-charts" class="form-input" type="number" value="12" min="1" max="30">
                         </div>

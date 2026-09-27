@@ -40,11 +40,19 @@ function getSettings() {
     return {
         apiUrl: url.replace(/\/+$/, ''),
         maxCharts: parseInt(localStorage.getItem('max_charts') || '12'),
-        theme: localStorage.getItem('chart_theme') || 'plotly_dark'
+        theme: localStorage.getItem('chart_theme') || 'plotly_dark',
+        geminiKey: localStorage.getItem('gemini_key') || ''
     };
 }
 
 function saveSettings() {
+    const customUrl = document.getElementById('setting-api-url')?.value.trim();
+    if (customUrl) {
+        localStorage.setItem('api_url', customUrl);
+    } else {
+        localStorage.removeItem('api_url');
+    }
+
     localStorage.setItem('max_charts', document.getElementById('setting-max-charts').value);
     localStorage.setItem('chart_theme', document.getElementById('setting-theme').value);
     localStorage.setItem('gemini_key', document.getElementById('setting-gemini-key').value.trim());
@@ -211,6 +219,10 @@ async function runAnalysis(file) {
         if (!response.ok || result.status === 'error') {
             throw new Error(result.detail || result.message || 'Data processing failed');
         }
+
+        if (!result.analysis || !result.charts) {
+            throw new Error("Connected backend at " + settings.apiUrl + " returned an unexpected response format. Please check 'Settings' and ensure your Backend API URL points to your deployed FastAPI service.");
+        }
     } catch (err) {
         hideProgress();
         console.error("Analysis Error:", err);
@@ -228,10 +240,10 @@ async function runAnalysis(file) {
 
     // Populate UI Sections
     populateKPIs(result.analysis);
-    populateInsights(result.analysis.insights);
+    populateInsights(result.analysis ? result.analysis.insights : []);
     populateDashboardCharts(result.charts || []);
     populateDataOverview(result.analysis, result.filename);
-    populateCleaningSection(result.analysis.cleaning_report);
+    populateCleaningSection(result.analysis ? result.analysis.cleaning_report : null);
     populateGraphsSection(result.charts || []);
     populateMLSection(result.ml_prediction);
     populateReportsSection(result.analysis, result.report_text);
@@ -1059,11 +1071,13 @@ document.addEventListener('DOMContentLoaded', () => {
     initNav();
     initFileInputs();
 
-    const { maxCharts, theme, geminiKey } = getSettings();
+    const { apiUrl, maxCharts, theme, geminiKey } = getSettings();
+    const urlInput = document.getElementById('setting-api-url');
     const maxInput = document.getElementById('setting-max-charts');
     const themeInput = document.getElementById('setting-theme');
     const keyInput = document.getElementById('setting-gemini-key');
 
+    if (urlInput) urlInput.value = apiUrl;
     if (maxInput) maxInput.value = maxCharts;
     if (themeInput) themeInput.value = theme;
     if (keyInput) keyInput.value = geminiKey;
