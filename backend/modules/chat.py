@@ -8,25 +8,24 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 # ─── Central Model Configuration ──────────────────────────────────────────────
 # Update GEMINI_MODEL here to change the model across the entire backend.
-GEMINI_MODEL = "gemini-3.8-flash"
+GEMINI_MODEL = "gemini-1.5-flash"
 
 # Ordered fallback list: primary model first, then stable legacy options
 GEMINI_FALLBACK_MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.5-flash",
     "gemini-1.5-flash",
-    "gemini-1.5-flash-latest",
+    "gemini-1.5-pro",
+    "gemini-2.0-flash-exp",
 ]
 
 # ─── User-Friendly Error Messages ─────────────────────────────────────────────
 def _friendly_error(raw_error: str) -> str:
     """Map technical Gemini API errors to friendly user-facing messages."""
     err = str(raw_error).lower()
-    if "401" in err or "403" in err or "api_key_invalid" in err or "unauthorized" in err:
+    if any(k in err for k in ["400", "401", "403", "api_key", "invalid", "unauthorized", "api_key_invalid"]):
         return (
             "⚠️ AI Assistant is temporarily unavailable.\n"
             "The Gemini API key appears to be invalid or unauthorized.\n"
-            "Please check that **GEMINI_API_KEY** is correctly set in **backend/.env** and restart the server."
+            "Please toggle on 'Use my Gemini API key' in Settings and enter a valid API key from https://aistudio.google.com/apikey"
         )
     if "404" in err or "not found" in err or "no longer available" in err:
         return (
@@ -147,7 +146,7 @@ Instructions:
         except Exception as e:
             last_error = str(e)
             # Don't retry on key auth failures — they will fail for every model
-            if any(code in str(e) for code in ["401", "403", "API_KEY_INVALID"]):
+            if any(code in str(e).lower() for code in ["400", "401", "403", "api_key", "invalid", "unauthorized", "api_key_invalid"]):
                 break
             continue
 
