@@ -75,14 +75,27 @@ function getSettings() {
         apiUrl: getApiBaseUrl(),
         maxCharts: parseInt(localStorage.getItem('max_charts') || '12'),
         theme: localStorage.getItem('chart_theme') || 'plotly_dark',
-        geminiKey: localStorage.getItem('gemini_key') || ''
+        geminiKey: sessionStorage.getItem('user_gemini_key') || ''
     };
 }
 
 function saveSettings() {
     localStorage.setItem('max_charts', document.getElementById('setting-max-charts').value);
     localStorage.setItem('chart_theme', document.getElementById('setting-theme').value);
-    localStorage.setItem('gemini_key', document.getElementById('setting-gemini-key').value.trim());
+
+    // Save Gemini key to sessionStorage (cleared when browser closes)
+    const toggle = document.getElementById('gemini-key-toggle');
+    const keyInput = document.getElementById('setting-gemini-key');
+    if (toggle && toggle.checked && keyInput) {
+        const key = keyInput.value.trim();
+        if (key) {
+            sessionStorage.setItem('user_gemini_key', key);
+        } else {
+            sessionStorage.removeItem('user_gemini_key');
+        }
+    } else {
+        sessionStorage.removeItem('user_gemini_key');
+    }
 
     if (analysisData && analysisData.charts) {
         populateDashboardCharts(analysisData.charts);
@@ -92,6 +105,46 @@ function saveSettings() {
     const msg = document.getElementById('settings-msg');
     msg.style.display = 'block';
     setTimeout(() => msg.style.display = 'none', 2500);
+}
+
+// ─── Gemini Key Toggle & Clear ─────────────────────────────────
+function toggleGeminiKeyInput() {
+    const toggle = document.getElementById('gemini-key-toggle');
+    const section = document.getElementById('gemini-key-section');
+    const defaultMsg = document.getElementById('gemini-key-default-msg');
+    const statusEl = document.getElementById('gemini-key-status');
+
+    if (toggle && toggle.checked) {
+        if (section) section.style.display = 'block';
+        if (defaultMsg) defaultMsg.style.display = 'none';
+        // Restore from sessionStorage if available
+        const savedKey = sessionStorage.getItem('user_gemini_key') || '';
+        const keyInput = document.getElementById('setting-gemini-key');
+        if (keyInput && savedKey) keyInput.value = savedKey;
+    } else {
+        if (section) section.style.display = 'none';
+        if (defaultMsg) defaultMsg.style.display = 'block';
+        if (statusEl) statusEl.style.display = 'none';
+        sessionStorage.removeItem('user_gemini_key');
+        const keyInput = document.getElementById('setting-gemini-key');
+        if (keyInput) keyInput.value = '';
+    }
+}
+
+function clearGeminiKey() {
+    sessionStorage.removeItem('user_gemini_key');
+    const keyInput = document.getElementById('setting-gemini-key');
+    if (keyInput) keyInput.value = '';
+    const toggle = document.getElementById('gemini-key-toggle');
+    if (toggle) toggle.checked = false;
+    toggleGeminiKeyInput();
+    const statusEl = document.getElementById('gemini-key-status');
+    if (statusEl) {
+        statusEl.textContent = '🔒 Cleared. Using default AI service.';
+        statusEl.style.color = '#10b981';
+        statusEl.style.display = 'block';
+        setTimeout(() => statusEl.style.display = 'none', 3000);
+    }
 }
 
 // ─── Section Meta & Navigation ─────────────────────────────────
@@ -975,15 +1028,20 @@ async function sendChatQuery() {
     if (input) input.disabled = true;
 
     try {
-        // ── API key is NEVER sent from frontend — handled by backend ──
+        // Build chat payload — include user_api_key only if user provided one
+        const chatPayload = {
+            query: query,
+            file_path: analysisData.file_path
+        };
+        const userKey = sessionStorage.getItem('user_gemini_key');
+        if (userKey && userKey.trim()) {
+            chatPayload.user_api_key = userKey.trim();
+        }
+
         const response = await fetch(`${settings.apiUrl}/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                query: query,
-                file_path: analysisData.file_path
-                // api_key intentionally omitted — backend reads from .env
-            })
+            body: JSON.stringify(chatPayload)
         });
 
         const result = await response.json();
@@ -1001,6 +1059,19 @@ async function sendChatQuery() {
         // Check if response is an error/warning from backend
         const isError = rawText.startsWith('⚠️') || rawText.startsWith('Error:');
         const labelColor = isError ? '#ef4444' : 'var(--text-primary)';
+
+        // Detect invalid user key and show actionable message in Settings
+        if (isError && (rawText.includes('invalid') || rawText.includes('unauthorized') || rawText.includes('API_KEY_INVALID'))) {
+            const hasUserKey = sessionStorage.getItem('user_gemini_key');
+            if (hasUserKey) {
+                const statusEl = document.getElementById('gemini-key-status');
+                if (statusEl) {
+                    statusEl.textContent = '⚠️ Your Gemini API key appears invalid. Clear it to use the default AI service.';
+                    statusEl.style.color = '#ef4444';
+                    statusEl.style.display = 'block';
+                }
+            }
+        }
 
         aiDiv.innerHTML = `<strong style="color:${labelColor}">AI Assistant:</strong> <div style="margin-top:6px; line-height:1.6">${mdText}</div>`;
 
@@ -1051,6 +1122,7 @@ async function clearAll() {
     }
 
     analysisData = null;
+    sessionStorage.removeItem('user_gemini_key');
 
     ['file-name-dash'].forEach(id => {
         const el = document.getElementById(id);
@@ -1102,9 +1174,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const { maxCharts, theme, geminiKey } = getSettings();
     const maxInput = document.getElementById('setting-max-charts');
     const themeInput = document.getElementById('setting-theme');
-    const keyInput = document.getElementById('setting-gemini-key');
 
     if (maxInput) maxInput.value = maxCharts;
     if (themeInput) themeInput.value = theme;
-    if (keyInput) keyInput.value = geminiKey;
+
+    // Restore Gemini key toggle state from sessionStorage
+    const savedKey = sessionStorage.getItem('user_gemini_key');
+    const toggle = document.getElementById('gemini-key-toggle');
+    if (savedKey && toggle) {
+        toggle.checked = true;
+        toggleGeminiKeyInput();
+    }
 });

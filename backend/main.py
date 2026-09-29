@@ -70,7 +70,7 @@ else:
 class ChatRequest(BaseModel):
     query: str
     file_path: str
-    # api_key is intentionally removed — Gemini key is backend-only via .env
+    user_api_key: Optional[str] = None  # Optional user-provided Gemini key; falls back to server .env
 
 
 class TrainMLRequest(BaseModel):
@@ -283,8 +283,14 @@ def data_chat(request: ChatRequest):
     if not req_path.exists():
         raise HTTPException(status_code=404, detail="Dataset file not found. Please re-upload your dataset.")
 
-    # API key is ALWAYS read from backend .env — never from the request body
-    response_text = chat_with_data(str(req_path), request.query)
+    # Select API key: user-provided key takes priority, then backend .env default
+    user_key = request.user_api_key.strip() if request.user_api_key and request.user_api_key.strip() else None
+    selected_key = user_key or GEMINI_API_KEY
+
+    if not selected_key:
+        raise HTTPException(status_code=503, detail="AI service is not configured.")
+
+    response_text = chat_with_data(str(req_path), request.query, api_key=selected_key)
     return {"status": "success", "response": response_text}
 
 

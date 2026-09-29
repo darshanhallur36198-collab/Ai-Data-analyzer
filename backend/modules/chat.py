@@ -53,18 +53,21 @@ def _friendly_error(raw_error: str) -> str:
 def chat_with_data(file_path: str, query: str, api_key: str = None) -> str:
     """
     Sends a dataset-context-aware question to Gemini and returns the AI response.
-    - API key is loaded ONLY from the backend .env file (never from the frontend).
+    - api_key: selected key passed from the endpoint (user key or server .env key).
     - Sends compact summaries, never full raw datasets.
     - Applies user-friendly error messages for common failure modes.
     """
-    # API key: backend .env takes priority; never rely on frontend-submitted key
-    key_to_use = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    # Priority: passed api_key → environment variable → error
+    key_to_use = (
+        api_key.strip() if api_key and api_key.strip()
+        else os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    )
 
     if not key_to_use:
         return (
             "⚠️ AI Assistant is not configured.\n"
-            "**GEMINI_API_KEY** is missing from **backend/.env**.\n"
-            "Add your key to `backend/.env` and restart the server."
+            "No API key was provided, and **GEMINI_API_KEY** is missing from **backend/.env**.\n"
+            "Please provide a key in Settings or configure the server."
         )
 
     # Configure Gemini SDK

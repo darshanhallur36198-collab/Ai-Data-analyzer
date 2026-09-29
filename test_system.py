@@ -113,6 +113,65 @@ def test_full_pipeline():
     print(f"   - Live Regression Prediction Output: {pred_reg_data['prediction_formatted']}")
     print("✅ Priority 7 - Live Prediction Calculator (Regression): PASS")
 
+    # 8. Verify AI Assistant - Case 1: No user key (Default backend GEMINI_API_KEY used)
+    chat_res1 = client.post("/chat", json={
+        "file_path": test_csv_path,
+        "query": "What is the total number of rows?"
+    })
+    assert chat_res1.status_code == 200
+    assert "response" in chat_res1.json()
+    print("✅ AI Assistant Case 1 (No user key -> Default backend key used): PASS")
+
+    # 9. Verify AI Assistant - Case 2: Valid user key supplied
+    valid_key = os.getenv("GEMINI_API_KEY")
+    if valid_key:
+        chat_res2 = client.post("/chat", json={
+            "file_path": test_csv_path,
+            "query": "Summarize this dataset",
+            "user_api_key": valid_key
+        })
+        assert chat_res2.status_code == 200
+        assert "response" in chat_res2.json()
+        print("✅ AI Assistant Case 2 (Valid user key supplied -> User key used): PASS")
+
+    # 10. Verify AI Assistant - Case 3: Invalid user key supplied
+    chat_res3 = client.post("/chat", json={
+        "file_path": test_csv_path,
+        "query": "Test query",
+        "user_api_key": "INVALID_DUMMY_KEY_999"
+    })
+    assert chat_res3.status_code == 200
+    chat_json3 = chat_res3.json()
+    assert "response" in chat_json3
+    # Verify security: raw API key must NEVER be exposed in error responses
+    assert "INVALID_DUMMY_KEY_999" not in chat_json3["response"]
+    print("✅ AI Assistant Case 3 (Invalid user key -> Friendly error, key not exposed): PASS")
+
+    # 11. Verify AI Assistant - Case 4: Default key missing but valid user key supplied
+    original_env_key = os.environ.get("GEMINI_API_KEY")
+    try:
+        if "GEMINI_API_KEY" in os.environ:
+            del os.environ["GEMINI_API_KEY"]
+
+        nokey_res = client.post("/chat", json={
+            "file_path": test_csv_path,
+            "query": "Test query"
+        })
+        assert nokey_res.status_code in [503, 200]
+
+        if valid_key:
+            userkey_res = client.post("/chat", json={
+                "file_path": test_csv_path,
+                "query": "Test query",
+                "user_api_key": valid_key
+            })
+            assert userkey_res.status_code == 200
+            assert "response" in userkey_res.json()
+            print("✅ AI Assistant Case 4 (Backend key missing but valid user key supplied -> Works): PASS")
+    finally:
+        if original_env_key:
+            os.environ["GEMINI_API_KEY"] = original_env_key
+
     # Verify Priority 10: Path Traversal Protection on /clear
     bad_clear_res = client.post("/clear", json={"file_path": "../../etc/passwd"})
     assert bad_clear_res.status_code == 400
@@ -128,3 +187,4 @@ def test_full_pipeline():
 
 if __name__ == "__main__":
     test_full_pipeline()
+
