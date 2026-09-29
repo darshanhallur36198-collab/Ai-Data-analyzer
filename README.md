@@ -139,11 +139,8 @@ Set the following variables in `backend/.env` (Local) or **Render Dashboard** (P
    - **Output Directory**: `.`
 4. Click **Deploy**.
 5. Once deployed, copy your Vercel URL (e.g., `https://ai-data-analyzer.vercel.app`).
-6. Open `frontend/app.js` and set:
-   ```javascript
-   const PRODUCTION_API_URL = "https://ai-data-analyzer-api.onrender.com";
-   ```
-7. Commit and push the updated `frontend/app.js` to GitHub.
+6. Ensure `vercel.json` contains the reverse proxy rewrite for `/api/(.*)` pointing to your Render backend URL.
+7. Commit and push changes to GitHub.
 
 ---
 

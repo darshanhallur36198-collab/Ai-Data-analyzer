@@ -20,25 +20,59 @@ function startApp() {
     }
 }
 
-// ─── Central API URL Configuration ──────────────────────────────
-// Replace this with your deployed Render backend URL after creating the Render Web Service:
-const PRODUCTION_API_URL = 'https://ai-data-analyzer-api.onrender.com';
+// ─── Central API Proxy & Server Health Check ─────────────────────
+const API_BASE_URL = "/api";
+
+function getApiBaseUrl() {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (isLocalhost && window.location.port !== '3000') {
+        return 'http://127.0.0.1:8000';
+    }
+    return API_BASE_URL;
+}
+
+async function checkBackendHealth() {
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('backend-status-text');
+    const baseUrl = getApiBaseUrl();
+
+    if (!statusDot || !statusText) return;
+
+    statusDot.className = 'status-dot waking';
+    statusText.textContent = 'Connecting...';
+
+    const maxTries = 12;
+    for (let attempt = 1; attempt <= maxTries; attempt++) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+            const response = await fetch(`${baseUrl}/health`, { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                statusDot.className = 'status-dot online';
+                statusText.textContent = 'Backend Connected';
+                return true;
+            }
+        } catch (err) {
+            if (attempt === 1) {
+                statusText.textContent = 'Server waking up...';
+            } else {
+                statusText.textContent = `Waking server (${attempt}/${maxTries})...`;
+            }
+        }
+        await new Promise(r => setTimeout(r, 2500));
+    }
+
+    statusDot.className = 'status-dot offline';
+    statusText.textContent = 'Backend Offline';
+    return false;
+}
 
 function getSettings() {
-    let url = localStorage.getItem('api_url');
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-    // Purge stale local API URLs from browser localStorage when running in production
-    if (!isLocalhost && url && (url.includes('localhost') || url.includes('127.0.0.1'))) {
-        localStorage.removeItem('api_url');
-        url = null;
-    }
-
-    if (!url) {
-        url = isLocalhost ? 'http://127.0.0.1:8000' : PRODUCTION_API_URL;
-    }
     return {
-        apiUrl: url.replace(/\/+$/, ''),
+        apiUrl: getApiBaseUrl(),
         maxCharts: parseInt(localStorage.getItem('max_charts') || '12'),
         theme: localStorage.getItem('chart_theme') || 'plotly_dark',
         geminiKey: localStorage.getItem('gemini_key') || ''
@@ -46,13 +80,6 @@ function getSettings() {
 }
 
 function saveSettings() {
-    const customUrl = document.getElementById('setting-api-url')?.value.trim();
-    if (customUrl) {
-        localStorage.setItem('api_url', customUrl);
-    } else {
-        localStorage.removeItem('api_url');
-    }
-
     localStorage.setItem('max_charts', document.getElementById('setting-max-charts').value);
     localStorage.setItem('chart_theme', document.getElementById('setting-theme').value);
     localStorage.setItem('gemini_key', document.getElementById('setting-gemini-key').value.trim());
@@ -77,7 +104,7 @@ const SECTION_META = {
     'section-predict': { title: 'Live Prediction Calculator', sub: 'Input custom feature values for live real-time model predictions' },
     'section-chat': { title: 'AI Assistant', sub: 'Ask natural language questions about your dataset powered by Gemini' },
     'section-reports': { title: 'Report & Export', sub: 'Download comprehensive statistical analysis report' },
-    'section-settings': { title: 'Settings', sub: 'Configure API key, max charts, and chart themes' },
+    'section-settings': { title: 'Settings', sub: 'Configure application preferences' },
 };
 
 function initNav() {
@@ -1070,14 +1097,13 @@ async function clearAll() {
 document.addEventListener('DOMContentLoaded', () => {
     initNav();
     initFileInputs();
+    checkBackendHealth();
 
-    const { apiUrl, maxCharts, theme, geminiKey } = getSettings();
-    const urlInput = document.getElementById('setting-api-url');
+    const { maxCharts, theme, geminiKey } = getSettings();
     const maxInput = document.getElementById('setting-max-charts');
     const themeInput = document.getElementById('setting-theme');
     const keyInput = document.getElementById('setting-gemini-key');
 
-    if (urlInput) urlInput.value = apiUrl;
     if (maxInput) maxInput.value = maxCharts;
     if (themeInput) themeInput.value = theme;
     if (keyInput) keyInput.value = geminiKey;

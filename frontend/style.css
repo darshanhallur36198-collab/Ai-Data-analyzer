@@ -772,3 +772,56 @@ body {
     font-size: 1rem;
   }
 }
+
+/* ── Backend Connectivity Status Badge ── */
+.backend-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+
+.status-dot.online {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+.status-dot.waking {
+  background: #f59e0b;
+  animation: pulse-dot 1.2s infinite ease-in-out;
+}
+
+.status-dot.offline {
+  background: #ef4444;
+}
+
+@keyframes pulse-dot {
+
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.9);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
