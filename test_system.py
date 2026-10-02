@@ -113,7 +113,17 @@ def test_full_pipeline():
     print(f"   - Live Regression Prediction Output: {pred_reg_data['prediction_formatted']}")
     print("✅ Priority 7 - Live Prediction Calculator (Regression): PASS")
 
-    # 8. Verify AI Assistant - Case 1: No user key (Default backend GEMINI_API_KEY used)
+    # 8. Verify GET /ai-health endpoint
+    health_res = client.get("/ai-health")
+    assert health_res.status_code == 200
+    health_data = health_res.json()
+    assert "status" in health_data
+    assert health_data["status"] in ["ready", "unavailable"]
+    if health_data["status"] == "ready":
+        assert "model" in health_data
+    print(f"✅ AI Health Check Endpoint (/ai-health): PASS -> {health_data}")
+
+    # 9. Verify AI Assistant - Case 1: No user key (Default backend GEMINI_API_KEY used)
     chat_res1 = client.post("/chat", json={
         "file_path": test_csv_path,
         "query": "What is the total number of rows?"
@@ -122,7 +132,7 @@ def test_full_pipeline():
     assert "response" in chat_res1.json()
     print("✅ AI Assistant Case 1 (No user key -> Default backend key used): PASS")
 
-    # 9. Verify AI Assistant - Case 2: Valid user key supplied
+    # 10. Verify AI Assistant - Case 2: Valid user key supplied
     valid_key = os.getenv("GEMINI_API_KEY")
     if valid_key:
         chat_res2 = client.post("/chat", json={
@@ -134,7 +144,7 @@ def test_full_pipeline():
         assert "response" in chat_res2.json()
         print("✅ AI Assistant Case 2 (Valid user key supplied -> User key used): PASS")
 
-    # 10. Verify AI Assistant - Case 3: Invalid user key supplied
+    # 11. Verify AI Assistant - Case 3: Invalid user key supplied
     chat_res3 = client.post("/chat", json={
         "file_path": test_csv_path,
         "query": "Test query",
@@ -143,11 +153,13 @@ def test_full_pipeline():
     assert chat_res3.status_code == 200
     chat_json3 = chat_res3.json()
     assert "response" in chat_json3
+    # Verify exact user-friendly invalid key error message
+    assert "Your Gemini API key is invalid" in chat_json3["response"] or "invalid" in chat_json3["response"].lower()
     # Verify security: raw API key must NEVER be exposed in error responses
     assert "INVALID_DUMMY_KEY_999" not in chat_json3["response"]
     print("✅ AI Assistant Case 3 (Invalid user key -> Friendly error, key not exposed): PASS")
 
-    # 11. Verify AI Assistant - Case 4: Default key missing but valid user key supplied
+    # 12. Verify AI Assistant - Case 4: Default key missing but valid user key supplied
     original_env_key = os.environ.get("GEMINI_API_KEY")
     try:
         if "GEMINI_API_KEY" in os.environ:

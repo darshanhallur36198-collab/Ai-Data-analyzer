@@ -16,7 +16,7 @@ from backend.modules.analyzer import dataset_statistics
 from backend.modules.visualizer import generate_charts
 from backend.modules.ml_model import train_ml_model
 from backend.modules.predictor import predict_live
-from backend.modules.chat import chat_with_data
+from backend.modules.chat import chat_with_data, get_current_ai_model, is_ai_configured
 from backend.modules.report_generator import generate_report_content
 
 logging.basicConfig(level=logging.INFO)
@@ -138,6 +138,21 @@ def ai_status():
         "status": "configured",
         "model": GEMINI_MODEL,
         "message": "Gemini AI is configured and ready."
+    }
+
+
+@app.get("/ai-health")
+def ai_health():
+    """
+    Gemini AI health check returning ready status and active model without exposing keys.
+    """
+    if not is_ai_configured():
+        return {"status": "unavailable"}
+
+    current_model = get_current_ai_model()
+    return {
+        "status": "ready",
+        "model": current_model
     }
 
 
@@ -288,9 +303,18 @@ def data_chat(request: ChatRequest):
     selected_key = user_key or GEMINI_API_KEY
 
     if not selected_key:
-        raise HTTPException(status_code=503, detail="AI service is not configured.")
+        return {
+            "status": "success",
+            "response": "⚠️ AI Assistant is not configured. Please check backend configuration or provide a key in Settings."
+        }
 
-    response_text = chat_with_data(str(req_path), request.query, api_key=selected_key)
+    is_custom_user_key = bool(user_key)
+    response_text = chat_with_data(
+        str(req_path),
+        request.query,
+        api_key=selected_key,
+        is_custom_user_key=is_custom_user_key
+    )
     return {"status": "success", "response": response_text}
 
 
