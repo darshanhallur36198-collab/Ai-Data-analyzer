@@ -1320,7 +1320,10 @@ async function exportAnalysisToPDF() {
 
         // 5. Visualizations
         if (analysisData.charts && analysisData.charts.length > 0) {
-            if (btn) btn.innerHTML = "⏳ Generating charts...";
+            const maxChartsSetting = getSettings().maxCharts;
+            const chartsToExport = analysisData.charts.slice(0, maxChartsSetting);
+
+            if (btn) btn.innerHTML = "⏳ Preparing statistics...";
             addSectionHeader("Visualizations");
 
             // Render hidden Plotly div for high quality images
@@ -1329,24 +1332,55 @@ async function exportAnalysisToPDF() {
             tempDiv.style.position = 'absolute';
             document.body.appendChild(tempDiv);
 
-            for (let i = 0; i < analysisData.charts.length; i++) {
-                const chart = analysisData.charts[i];
+            for (let i = 0; i < chartsToExport.length; i++) {
+                if (btn) btn.innerHTML = `⏳ Exporting chart ${i + 1} of ${chartsToExport.length}...`;
+
+                const chart = chartsToExport[i];
                 let cTitle = chart.layout && chart.layout.title ? chart.layout.title.text || "" : "";
                 cTitle = cTitle.replace(/<[^>]+>/g, '') || `Visualization ${i + 1}`;
+
+                // Deep copy layout to not mutate internal state
                 const safeLayout = JSON.parse(JSON.stringify(chart.layout || {}));
-                safeLayout.title = ''; // Hide title inside the image, we draw it manually
-                safeLayout.height = 600;
-                safeLayout.width = 1000;
-                safeLayout.margin = { l: 80, r: 40, t: 30, b: 80 };
+
+                // Export-specific layout configuration
+                safeLayout.title = '';
+                safeLayout.height = 800;
+                safeLayout.width = 1400;
+                safeLayout.margin = { l: 100, r: 80, t: 30, b: 120 };
                 safeLayout.paper_bgcolor = '#ffffff';
-                safeLayout.plot_bgcolor = '#f8fafc';
+                safeLayout.plot_bgcolor = '#ffffff';
+                safeLayout.font = { size: 14, color: '#0f172a', family: 'Inter, sans-serif' };
+
+                if (safeLayout.xaxis) {
+                    safeLayout.xaxis.automargin = true;
+                    safeLayout.xaxis.showticklabels = true;
+                    safeLayout.xaxis.ticks = 'outside';
+                    safeLayout.xaxis.tickfont = { size: 14, color: '#0f172a' };
+                    if (safeLayout.xaxis.title) {
+                        safeLayout.xaxis.title.font = { size: 16, color: '#0f172a' };
+                    }
+                    safeLayout.xaxis.gridcolor = '#e2e8f0';
+                    safeLayout.xaxis.linecolor = '#cbd5e1';
+                }
+
+                if (safeLayout.yaxis) {
+                    safeLayout.yaxis.automargin = true;
+                    safeLayout.yaxis.showticklabels = true;
+                    safeLayout.yaxis.ticks = 'outside';
+                    safeLayout.yaxis.tickfont = { size: 14, color: '#0f172a' };
+                    if (safeLayout.yaxis.title) {
+                        safeLayout.yaxis.title.font = { size: 16, color: '#0f172a' };
+                    }
+                    safeLayout.yaxis.gridcolor = '#e2e8f0';
+                    safeLayout.yaxis.linecolor = '#cbd5e1';
+                }
 
                 try {
                     await Plotly.newPlot(tempDiv, chart.data, safeLayout);
-                    const imgData = await Plotly.toImage(tempDiv, { format: 'png', width: 1200, height: 700, scale: 2 });
+                    const imgData = await Plotly.toImage(tempDiv, { format: 'png', width: 1400, height: 800, scale: 2 });
 
                     const availableWidth = pageWidth - margin * 2;
-                    const aspect = 700 / 1200;
+                    const aspect = 800 / 1400;
                     const imgHeight = availableWidth * aspect;
 
                     addPageIfNeeded(imgHeight + 30);
@@ -1359,10 +1393,10 @@ async function exportAnalysisToPDF() {
             }
             document.body.removeChild(tempDiv);
         }
-
         // 6. ML Results
         const ml = analysisData.ml_prediction;
         if (ml && !ml.error && ml.target_column) {
+            if (btn) btn.innerHTML = "⏳ Adding ML results...";
             addSectionHeader("Machine Learning Results");
             addText(`Target Column: ${ml.target_column}`, 11, true);
             addText(`Problem Type: ${ml.problem_type || 'Unknown'}`, 11);
@@ -1418,34 +1452,46 @@ async function exportAnalysisToPDF() {
         }
 
         // 8. AI Insights
-        addSectionHeader("AI Insights");
-        const bubbles = document.querySelectorAll('#ai-bubbles .ai-bubble-content, #chat-messages .chat-msg.bot .msg-content');
-        let aiInsightFound = false;
+        if (btn) btn.innerHTML = "⏳ Adding AI insights...";
+        addSectionHeader("AI-Assisted Insights");
 
-        // Grab either the initial exec summary or the first bot response
+        // Grab bubbles and chat history that are 'bot' replies
+        const bubbles = document.querySelectorAll('#ai-bubbles .ai-bubble-content, #chat-messages .chat-msg.bot .msg-content');
+        let insightCount = 0;
+
         if (bubbles.length > 0) {
             for (let i = 0; i < bubbles.length; i++) {
+                if (insightCount >= 5) break; // limit to latest/top 5
+
                 const bText = bubbles[i].innerText || bubbles[i].textContent;
-                // Exclude the default empty state prompt text
-                if (bText && !bText.includes('Ask questions about your uploaded dataset') && !bText.includes('AI Assistant is thinking')) {
-                    aiInsightFound = true;
-                    addText("Latest AI Synthesis:", 11, true);
-                    addText(bText, 10);
-                    break;
+                // Clean and ignore placeholders/errors
+                if (bText &&
+                    !bText.includes('Ask questions about your uploaded dataset') &&
+                    !bText.includes('AI Assistant is thinking') &&
+                    !bText.includes('API key is invalid') &&
+                    !bText.includes('temporary error')) {
+
+                    if (insightCount === 0) {
+                        addText("Key Findings & AI Analysis:", 11, true);
+                    }
+
+                    // Break down into smaller lines if it's very long
+                    addText("• " + bText.trim(), 10, false, [0, 0, 0], 10);
+                    yPos += 5;
+                    insightCount++;
                 }
             }
         }
 
-        if (!aiInsightFound) {
-            addText("No AI analysis generated.", 10, false, [100, 100, 100]);
+        if (insightCount === 0) {
+            addText("No AI-assisted insights were generated for this analysis.", 10, false, [100, 100, 100]);
         }
         yPos += 10;
 
         // 9. Conclusion
+        if (btn) btn.innerHTML = "⏳ Finalizing PDF...";
         addSectionHeader("Conclusion");
         addText("This report summarizes the uploaded dataset, cleaning operations, visual analysis, machine-learning results, and AI-assisted insights. Powered by AI Data Analyzer.", 11);
-
-        if (btn) btn.innerHTML = "⏳ Building PDF...";
 
         // 10. Add Footer to all pages
         const pageCount = doc.internal.getNumberOfPages();
