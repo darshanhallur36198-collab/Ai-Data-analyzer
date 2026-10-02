@@ -7,6 +7,7 @@
     <title>AI-Assisted Data Analysis — Automated Visualization & Prediction</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 
 <body>
@@ -266,7 +267,9 @@
                         style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px">
                         <div class="card-header" style="margin:0; border:none; padding:0">📄 Analysis Report &
                             Statistical Export</div>
-                        <div style="display:flex; gap:10px">
+                        <div style="display:flex; gap:10px; flex-wrap:wrap">
+                            <button id="btn-export-pdf" class="btn-primary" onclick="exportAnalysisToPDF()"
+                                style="background-color: var(--accent-color);">📄 Export Analysis to PDF</button>
                             <button class="btn-primary" onclick="downloadTextReport()">📥 Download Text Report</button>
                             <button class="btn-secondary" onclick="downloadReport()">📥 Download JSON</button>
                         </div>

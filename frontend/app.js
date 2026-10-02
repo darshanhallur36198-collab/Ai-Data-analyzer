@@ -1186,3 +1186,302 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleGeminiKeyInput();
     }
 });
+
+// ─── PDF Export Logic ──────────────────────────────────────────
+async function exportAnalysisToPDF() {
+    if (!analysisData || !analysisData.file_path) {
+        alert("Please upload and analyze a dataset before exporting the report.");
+        return;
+    }
+
+    const btn = document.getElementById('btn-export-pdf');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = "⏳ Preparing report...";
+    }
+
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'pt', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margin = 40;
+        let yPos = margin;
+
+        const addPageIfNeeded = (requiredSpace) => {
+            if (yPos + requiredSpace > pageHeight - margin - 30) { // leave room for footer
+                doc.addPage();
+                yPos = margin;
+            }
+        };
+
+        const addText = (text, size, isBold = false, color = [0, 0, 0], indent = 0) => {
+            if (!text) return;
+            doc.setFontSize(size);
+            doc.setFont("helvetica", isBold ? "bold" : "normal");
+            doc.setTextColor(...color);
+            const lines = doc.splitTextToSize(text, pageWidth - margin * 2 - indent);
+            addPageIfNeeded(lines.length * (size + 4));
+            doc.text(lines, margin + indent, yPos);
+            yPos += lines.length * (size + 4) + 4;
+        };
+
+        const addSectionHeader = (title) => {
+            addPageIfNeeded(40);
+            yPos += 10;
+            addText(title, 16, true, [30, 58, 138]);
+            doc.setDrawColor(200);
+            doc.line(margin, yPos - 12, pageWidth - margin, yPos - 12);
+        };
+
+        // 1. Cover Page
+        const logoImg = document.querySelector('.welcome-logo-img');
+        if (logoImg && logoImg.complete && logoImg.naturalWidth !== 0) {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = logoImg.naturalWidth;
+                canvas.height = logoImg.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(logoImg, 0, 0);
+                const base64Logo = canvas.toDataURL('image/png');
+
+                const logoAspect = logoImg.naturalHeight / logoImg.naturalWidth;
+                const logoW = 120;
+                const logoH = logoW * logoAspect;
+                doc.addImage(base64Logo, 'PNG', margin, yPos, logoW, logoH);
+                yPos += logoH + 20;
+            } catch (e) {
+                console.error("Could not add logo to PDF:", e);
+                yPos += 20;
+            }
+        }
+
+        addText("AI Data Analyzer", 24, true, [30, 58, 138]);
+        addText("Automated Dataset Analysis Report", 14, false, [100, 100, 100]);
+        yPos += 20;
+        addText("Dataset: " + (analysisData.filename || "Unknown"), 12, true);
+        const dateStr = new Date().toLocaleString();
+        addText("Generated: " + dateStr, 10, false, [100, 100, 100]);
+        yPos += 30;
+
+        // 2. Dataset Overview
+        const s = analysisData.analysis;
+        if (s) {
+            addSectionHeader("Dataset Overview");
+            const cr = s.cleaning_report || {};
+            addText(`Total Rows: ${cr.rows_before || s.total_rows || 0}`, 11);
+            addText(`Total Columns: ${s.total_columns || 0}`, 11);
+            addText(`Numeric Columns: ${s.numeric_columns || 0}`, 11);
+            addText(`Categorical Columns: ${s.categorical_columns || 0}`, 11);
+            if (s.quality_score !== undefined) {
+                addText(`Data Quality Score: ${s.quality_score}/100`, 11, true, [22, 163, 74]);
+            }
+            // Missing and duplicates overview
+            if (cr.missing_before !== undefined) {
+                addText(`Missing Values Found: ${cr.missing_before}`, 11);
+            }
+            if (cr.duplicates_before !== undefined) {
+                addText(`Duplicate Rows Found: ${cr.duplicates_before}`, 11);
+            }
+            yPos += 10;
+
+            // 3. Cleaning Summary
+            addSectionHeader("Data Cleaning Summary");
+            addText(`Rows Before Cleaning: ${cr.rows_before || '-'}`, 11);
+            addText(`Rows After Cleaning: ${cr.rows_after || '-'}`, 11);
+            addText(`Missing Values Fixed: ${cr.missing_values_fixed || 0}`, 11);
+            addText(`Duplicate Rows Removed: ${cr.duplicates_removed || 0}`, 11);
+            yPos += 10;
+        }
+
+        // 4. Data Statistics
+        // We add summary stats for a few numerical columns
+        if (s && s.numerical_summary) {
+            const cols = Object.keys(s.numerical_summary);
+            if (cols.length > 0) {
+                addSectionHeader("Data Statistics (Numeric Profiles)");
+                for (let i = 0; i < Math.min(cols.length, 5); i++) {
+                    const col = cols[i];
+                    addText(`Column: ${col}`, 11, true);
+                    const stats = s.numerical_summary[col];
+                    let statStr = [];
+                    if (stats.mean !== undefined && stats.mean !== null) statStr.push(`Mean: ${stats.mean}`);
+                    if (stats.min !== undefined && stats.min !== null) statStr.push(`Min: ${stats.min}`);
+                    if (stats.max !== undefined && stats.max !== null) statStr.push(`Max: ${stats.max}`);
+                    addText(statStr.join('  |  '), 10, false, [0, 0, 0], 10);
+                    yPos += 5;
+                }
+                if (cols.length > 5) {
+                    addText(`...and ${cols.length - 5} more numerical columns.`, 10, false, [100, 100, 100]);
+                }
+                yPos += 10;
+            }
+        }
+
+        // 5. Visualizations
+        if (analysisData.charts && analysisData.charts.length > 0) {
+            if (btn) btn.innerHTML = "⏳ Generating charts...";
+            addSectionHeader("Visualizations");
+
+            // Render hidden Plotly div for high quality images
+            const tempDiv = document.createElement('div');
+            tempDiv.style.visibility = 'hidden';
+            tempDiv.style.position = 'absolute';
+            document.body.appendChild(tempDiv);
+
+            for (let i = 0; i < analysisData.charts.length; i++) {
+                const chart = analysisData.charts[i];
+                let cTitle = chart.layout && chart.layout.title ? chart.layout.title.text || "" : "";
+                cTitle = cTitle.replace(/<[^>]+>/g, '') || `Visualization ${i + 1}`;
+                const safeLayout = JSON.parse(JSON.stringify(chart.layout || {}));
+                safeLayout.title = ''; // Hide title inside the image, we draw it manually
+                safeLayout.height = 600;
+                safeLayout.width = 1000;
+                safeLayout.margin = { l: 80, r: 40, t: 30, b: 80 };
+                safeLayout.paper_bgcolor = '#ffffff';
+                safeLayout.plot_bgcolor = '#f8fafc';
+
+                try {
+                    await Plotly.newPlot(tempDiv, chart.data, safeLayout);
+                    const imgData = await Plotly.toImage(tempDiv, { format: 'png', width: 1200, height: 700, scale: 2 });
+
+                    const availableWidth = pageWidth - margin * 2;
+                    const aspect = 700 / 1200;
+                    const imgHeight = availableWidth * aspect;
+
+                    addPageIfNeeded(imgHeight + 30);
+                    addText(cTitle, 12, true);
+                    doc.addImage(imgData, 'PNG', margin, yPos, availableWidth, imgHeight);
+                    yPos += imgHeight + 20;
+                } catch (e) {
+                    console.error("Failed to generate chart image for PDF:", e);
+                }
+            }
+            document.body.removeChild(tempDiv);
+        }
+
+        // 6. ML Results
+        const ml = analysisData.ml_prediction;
+        if (ml && !ml.error && ml.target_column) {
+            addSectionHeader("Machine Learning Results");
+            addText(`Target Column: ${ml.target_column}`, 11, true);
+            addText(`Problem Type: ${ml.problem_type || 'Unknown'}`, 11);
+            addText(`Model Selection: ${ml.model_type || 'Default Model'}`, 11);
+            yPos += 5;
+
+            if (ml.metrics) {
+                addText("Evaluation Metrics:", 11, true);
+                const exKeys = ['confusion_matrix', 'feature_importances'];
+                for (let k in ml.metrics) {
+                    if (!exKeys.includes(k) && typeof ml.metrics[k] !== 'object') {
+                        let mName = k.replace(/_/g, ' ').toUpperCase();
+                        addText(`${mName}: ${ml.metrics[k]}`, 10, false, [0, 0, 0], 10);
+                    }
+                }
+            }
+            yPos += 10;
+        }
+
+        // 7. Live Prediction
+        const predictOutputDOM = document.getElementById('predict-output');
+        if (predictOutputDOM && predictOutputDOM.innerText.trim().length > 0) {
+            const predText = predictOutputDOM.innerText.trim();
+            if (!predText.includes('Train a machine learning model') && !predText.includes('error')) {
+                addSectionHeader("Live Prediction Example");
+                const featInputs = document.querySelectorAll('.predict-input');
+                let inputsUsed = [];
+                featInputs.forEach(inp => {
+                    inputsUsed.push(`${inp.dataset.feature}: ${inp.value}`);
+                });
+
+                if (inputsUsed.length > 0) {
+                    addText("Feature Inputs:", 11, true);
+                    addText(inputsUsed.join(', '), 10, false, [0, 0, 0], 10);
+                    yPos += 5;
+                }
+                addText("Prediction Output:", 11, true);
+
+                // Parse prediction result from the UI block
+                const valElem = predictOutputDOM.querySelector('.kpi-val');
+                if (valElem) {
+                    addText(valElem.innerText, 13, true, [22, 163, 74], 10);
+                } else {
+                    addText(predText, 11, false, [0, 0, 0], 10);
+                }
+
+                const confElem = predictOutputDOM.querySelector('span[style*="color:#10b981"]');
+                if (confElem) {
+                    addText("Confidence: " + confElem.innerText, 10, false, [0, 0, 0], 10);
+                }
+                yPos += 10;
+            }
+        }
+
+        // 8. AI Insights
+        addSectionHeader("AI Insights");
+        const bubbles = document.querySelectorAll('#ai-bubbles .ai-bubble-content, #chat-messages .chat-msg.bot .msg-content');
+        let aiInsightFound = false;
+
+        // Grab either the initial exec summary or the first bot response
+        if (bubbles.length > 0) {
+            for (let i = 0; i < bubbles.length; i++) {
+                const bText = bubbles[i].innerText || bubbles[i].textContent;
+                // Exclude the default empty state prompt text
+                if (bText && !bText.includes('Ask questions about your uploaded dataset') && !bText.includes('AI Assistant is thinking')) {
+                    aiInsightFound = true;
+                    addText("Latest AI Synthesis:", 11, true);
+                    addText(bText, 10);
+                    break;
+                }
+            }
+        }
+
+        if (!aiInsightFound) {
+            addText("No AI analysis generated.", 10, false, [100, 100, 100]);
+        }
+        yPos += 10;
+
+        // 9. Conclusion
+        addSectionHeader("Conclusion");
+        addText("This report summarizes the uploaded dataset, cleaning operations, visual analysis, machine-learning results, and AI-assisted insights. Powered by AI Data Analyzer.", 11);
+
+        if (btn) btn.innerHTML = "⏳ Building PDF...";
+
+        // 10. Add Footer to all pages
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(9);
+            doc.setTextColor(150);
+            doc.text(`AI Data Analyzer | Automated Analysis Report | Page ${i}`, margin, pageHeight - 20);
+        }
+
+        // Dynamic Filename
+        const cleanName = analysisData.filename.replace(/\.[^/.]+$/, "").replace(/\s+/g, '_');
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const fileName = `AI_Data_Analyzer_${cleanName}_${yyyy}-${mm}-${dd}.pdf`;
+
+        doc.save(fileName);
+
+        if (btn) {
+            btn.innerHTML = "✅ Report Downloaded";
+            setTimeout(() => {
+                btn.innerHTML = "📄 Export Analysis to PDF";
+                btn.disabled = false;
+            }, 3000);
+        }
+
+    } catch (err) {
+        console.error("PDF generation failed:", err);
+        if (btn) {
+            btn.innerHTML = "❌ Export Failed";
+            setTimeout(() => {
+                btn.innerHTML = "📄 Export Analysis to PDF";
+                btn.disabled = false;
+            }, 3000);
+        }
+    }
+}
