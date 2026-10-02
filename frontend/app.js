@@ -484,9 +484,8 @@ function populateCleaningSection(rep) {
         </div>`;
 }
 
-// ─── Plotly Chart Rendering with Rotation & Label Fixes ───────
+// ─── Plotly Chart Rendering ────────────────────────────────────
 function renderChart(chartData, index, container, prefix = 'c') {
-    const settings = getSettings();
     const chartType = chartData._chart_type || 'other';
 
     const card = document.createElement('div');
@@ -508,16 +507,19 @@ function renderChart(chartData, index, container, prefix = 'c') {
 
     const plotId = `${prefix}_${index}`;
 
-    // Check if chart has bar trace for rotation toggle
+    // Show Rotate only for bar-based categorical/statistical charts
+    const rotatableTypes = ['categorical', 'statistical'];
     const hasBarTrace = (chartData.data || []).some(t => t.type === 'bar');
+    const isRotatable = hasBarTrace && rotatableTypes.includes(chartType);
 
-    if (hasBarTrace) {
+    if (isRotatable) {
         const rotBtn = document.createElement('button');
+        rotBtn.id = `rot-btn-${plotId}`;
         rotBtn.innerHTML = '🔄 Rotate';
         rotBtn.className = 'filter-btn';
         rotBtn.style.padding = '5px 12px';
         rotBtn.style.fontSize = '0.82rem';
-        rotBtn.title = 'Switch bar chart orientation (Horizontal vs Vertical)';
+        rotBtn.title = 'Toggle Horizontal / Vertical orientation';
         rotBtn.onclick = () => toggleChartRotation(plotId);
         btnGroup.appendChild(rotBtn);
     }
@@ -535,14 +537,16 @@ function renderChart(chartData, index, container, prefix = 'c') {
     const plotDiv = document.createElement('div');
     plotDiv.id = plotId;
     plotDiv.className = 'plotly-box';
+    // Store original data for rotation reset
     plotDiv.dataset.originalData = JSON.stringify(chartData.data);
     plotDiv.dataset.originalLayout = JSON.stringify(chartData.layout);
+    plotDiv.dataset.isRotated = 'false';
 
     card.appendChild(header);
     card.appendChild(plotDiv);
     container.appendChild(card);
 
-    // Enhanced Layout with high label visibility
+    // Build chart layout — light theme, readable axes
     const rawX = chartData.data && chartData.data[0] ? chartData.data[0].x : [];
     const isLongCategory = Array.isArray(rawX) && rawX.length > 4;
 
@@ -551,35 +555,38 @@ function renderChart(chartData, index, container, prefix = 'c') {
         autosize: true,
         height: 480,
         paper_bgcolor: 'rgba(0,0,0,0)',
-        plot_bgcolor: '#f8fafc',
-        margin: { l: 100, r: 40, t: 60, b: isLongCategory ? 110 : 80, pad: 6 },
+        plot_bgcolor: 'rgba(248,250,252,0.9)',
+        margin: { l: 100, r: 40, t: 65, b: isLongCategory ? 110 : 80, pad: 6 },
         font: { family: 'Inter, sans-serif', size: 12, color: '#0f172a' },
         title: {
             text: (chartData.layout?.title?.text || '').replace(/<[^>]+>/g, ''),
-            font: { size: 16, color: '#0f172a', family: 'Inter, sans-serif' },
-            x: 0.02,
-            xanchor: 'left'
+            font: { size: 15, color: '#0f172a', family: 'Inter, sans-serif' },
+            x: 0.02, xanchor: 'left'
         },
         xaxis: {
             ...(chartData.layout?.xaxis || {}),
             automargin: true,
+            showticklabels: true,
             tickangle: isLongCategory ? -35 : 0,
             tickfont: { size: 12, color: '#0f172a', family: 'Inter, sans-serif' },
             title: {
                 ...(chartData.layout?.xaxis?.title || {}),
                 font: { size: 13, color: '#0f172a', family: 'Inter, sans-serif' }
             },
-            gridcolor: '#e2e8f0'
+            gridcolor: '#e2e8f0',
+            linecolor: '#cbd5e1'
         },
         yaxis: {
             ...(chartData.layout?.yaxis || {}),
             automargin: true,
+            showticklabels: true,
             tickfont: { size: 12, color: '#0f172a', family: 'Inter, sans-serif' },
             title: {
                 ...(chartData.layout?.yaxis?.title || {}),
                 font: { size: 13, color: '#0f172a', family: 'Inter, sans-serif' }
             },
-            gridcolor: '#e2e8f0'
+            gridcolor: '#e2e8f0',
+            linecolor: '#cbd5e1'
         }
     };
     delete layout.width;
@@ -597,80 +604,90 @@ function renderChart(chartData, index, container, prefix = 'c') {
     }
 }
 
-// ─── Rotate / Orientation Toggle Function ──────────────────────
+// ─── Rotate / Orientation Toggle ──────────────────────────────
 function toggleChartRotation(plotId) {
     const el = document.getElementById(plotId);
     if (!el || !el.data) return;
 
     const isRotated = el.dataset.isRotated === 'true';
+    const rotBtn = document.getElementById(`rot-btn-${plotId}`);
+    const origData = JSON.parse(el.dataset.originalData || '[]');
+    const origLayout = JSON.parse(el.dataset.originalLayout || '{}');
+
+    // Read original axis titles from the stored layout
+    const origXTitle = origLayout?.xaxis?.title?.text || origLayout?.xaxis?.title || '';
+    const origYTitle = origLayout?.yaxis?.title?.text || origLayout?.yaxis?.title || '';
 
     if (!isRotated) {
-        // Rotate to Horizontal (swapped x and y)
-        const newTraces = el.data.map(t => {
-            if (t.type === 'bar') {
-                return {
-                    ...t,
-                    x: t.y,
-                    y: t.x,
-                    orientation: 'h',
-                    textposition: 'outside',
-                    textfont: { size: 11, color: '#0f172a' }
-                };
-            }
-            return t;
+        // ── Switch to Horizontal (swap x <-> y values, orientation = 'h') ──
+        const newTraces = origData.map(t => {
+            if (t.type !== 'bar') return t;
+            return {
+                ...t,
+                x: t.y,         // numeric values go to x-axis
+                y: t.x,         // categories go to y-axis
+                orientation: 'h',
+                textposition: 'outside',
+                textfont: { size: 11, color: '#0f172a' }
+            };
         });
-
-        const currentXTitle = el.layout.xaxis?.title?.text || '';
-        const currentYTitle = el.layout.yaxis?.title?.text || '';
 
         const newLayout = {
             ...el.layout,
+            margin: { l: 170, r: 60, t: 65, b: 60, pad: 6 },
             xaxis: {
                 ...el.layout.xaxis,
-                title: { text: currentYTitle, font: { size: 13, color: '#0f172a', family: 'Inter, sans-serif' } },
-                tickangle: 0,
                 automargin: true,
-                tickfont: { size: 12, color: '#0f172a', family: 'Inter, sans-serif' }
+                showticklabels: true,
+                tickangle: 0,
+                title: { text: origYTitle, font: { size: 13, color: '#0f172a', family: 'Inter, sans-serif' } },
+                tickfont: { size: 12, color: '#0f172a', family: 'Inter, sans-serif' },
+                gridcolor: '#e2e8f0'
             },
             yaxis: {
                 ...el.layout.yaxis,
-                title: { text: currentXTitle, font: { size: 13, color: '#0f172a', family: 'Inter, sans-serif' } },
                 automargin: true,
-                tickfont: { size: 12, color: '#0f172a', family: 'Inter, sans-serif' }
-            },
-            margin: { l: 150, r: 50, t: 60, b: 70, pad: 6 }
+                showticklabels: true,
+                title: { text: origXTitle, font: { size: 13, color: '#0f172a', family: 'Inter, sans-serif' } },
+                tickfont: { size: 12, color: '#0f172a', family: 'Inter, sans-serif' },
+                gridcolor: '#e2e8f0'
+            }
         };
 
         Plotly.react(plotId, newTraces, newLayout);
         el.dataset.isRotated = 'true';
-    } else {
-        // Restore original vertical orientation
-        const origData = JSON.parse(el.dataset.originalData);
-        const origLayout = JSON.parse(el.dataset.originalLayout);
+        if (rotBtn) rotBtn.innerHTML = '🔄 Vertical';
 
-        const rawX = origData && origData[0] ? origData[0].x : [];
-        const isLongCategory = Array.isArray(rawX) && rawX.length > 4;
+    } else {
+        // ── Restore original Vertical orientation from stored original data ──
+        const rawX = origData[0] ? origData[0].x : [];
+        const isLong = Array.isArray(rawX) && rawX.length > 4;
 
         const restoredLayout = {
             ...el.layout,
-            margin: { l: 100, r: 40, t: 60, b: isLongCategory ? 110 : 80, pad: 6 },
+            margin: { l: 100, r: 40, t: 65, b: isLong ? 110 : 80, pad: 6 },
             xaxis: {
                 ...el.layout.xaxis,
-                title: origLayout.xaxis?.title || el.layout.xaxis?.title,
-                tickangle: isLongCategory ? -35 : 0,
                 automargin: true,
-                tickfont: { size: 12, color: '#0f172a', family: 'Inter, sans-serif' }
+                showticklabels: true,
+                tickangle: isLong ? -35 : 0,
+                title: { text: origXTitle, font: { size: 13, color: '#0f172a', family: 'Inter, sans-serif' } },
+                tickfont: { size: 12, color: '#0f172a', family: 'Inter, sans-serif' },
+                gridcolor: '#e2e8f0'
             },
             yaxis: {
                 ...el.layout.yaxis,
-                title: origLayout.yaxis?.title || el.layout.yaxis?.title,
                 automargin: true,
-                tickfont: { size: 12, color: '#0f172a', family: 'Inter, sans-serif' }
+                showticklabels: true,
+                title: { text: origYTitle, font: { size: 13, color: '#0f172a', family: 'Inter, sans-serif' } },
+                tickfont: { size: 12, color: '#0f172a', family: 'Inter, sans-serif' },
+                gridcolor: '#e2e8f0'
             }
         };
 
         Plotly.react(plotId, origData, restoredLayout);
         el.dataset.isRotated = 'false';
+        if (rotBtn) rotBtn.innerHTML = '🔄 Rotate';
     }
 }
 
